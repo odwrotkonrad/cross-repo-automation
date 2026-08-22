@@ -112,6 +112,7 @@ edges:
     - notes
     - resume-md-pdf
   cross-repo/infra/iac/ci-var/configs-ref:
+    - ai-sandbox
     - cross-repo/automation
     - cross-repo/infra/oci-images
     - cross-repo/misc
@@ -144,6 +145,7 @@ edges:
     - che-packages
     - go-modules
   cross-repo/misc/ci-scripts:
+    - ai-sandbox
     - che-packages
     - configs
     - cross-repo/automation
