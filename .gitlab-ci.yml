@@ -79,6 +79,12 @@ validate-deps-graph:
         - bin/**/*
         - lib/**/*
         - .gitlab-ci.yml
+  #[why] the same token dispatch-event uses: this job reads every repo's .repo/ declarations, and
+  #   CI_JOB_TOKEN cannot read another private project. Unauthenticated those reads 404, which the
+  #   reader treats as "declares nothing", so a private repo silently vanishes from the aggregate
+  #   and the job reports drift against a graph that is actually correct
+  variables:
+    AUTOMATION_GITLAB_TOKEN: $REPO_VAR_AUTOMATION_GITLAB_TOKEN
   script:
     - make aggregate-check
 
