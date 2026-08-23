@@ -1,0 +1,18 @@
+##[>] 🤖
+artifacts:
+  gitlab.com/konradodwrot/go-modules/che:
+    type: goModule
+    versionEnvVar: GO_MODULES_CHE_REF
+  gitlab.com/konradodwrot/configs:
+    type: gitRepository
+    versionEnvVar: CONFIGS_REF
+  gitlab.com/konradodwrot/cross-repo/prose/assets:
+    type: gitRepository
+    versionEnvVar: PROSE_ASSETS_REF
+  registry/ci-linux:
+    type: ociImage
+    versionEnvVar: OCI_IMAGES_CI_LINUX_REF
+  registry/ci-linux-dind:
+    type: ociImage
+    versionEnvVar: OCI_IMAGES_CI_LINUX_DIND_REF
+##[<] 🤖

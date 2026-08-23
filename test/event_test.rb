@@ -3,35 +3,48 @@ require 'minitest/autorun'
 require 'automation'
 
 class EventTest < Minitest::Test
-  FIXTURE = File.expand_path('fixture', __dir__)
+  SOURCE = '{"project":"konradodwrot/notes","pipeline":"1","ref":"main","sha":"abc"}'.freeze
 
-  def test_parses_release_published
-    event = Automation::Event.parse(File.read("#{FIXTURE}/release-published.json"))
-    assert_equal 'release.published', event.type
-    assert_equal 'konradodwrot/cross-repo/prose/assets', event.source['project']
-    assert_equal 'v0.0.45', event.tag
-    assert_equal 'prose-assets v0.0.45', event.summary
+  def parse(json)
+    Automation::Event.parse_all(json, catalogue: Automation::Events)
   end
 
-  def test_parses_ci_var_changed
-    event = Automation::Event.parse(File.read("#{FIXTURE}/ci-var-changed.json"))
-    assert_equal 'ci-var.changed', event.type
-    assert_equal %w[GRP_KO_VAR_PROSE_ASSETS_REF GRP_KO_VAR_ARTIFACT_REGISTRY], event.details['variables'].map { |v| v['key'] }
+  def test_parses_an_array_of_events_in_one_send
+    json = "[{\"type\":\"artifacts.declared\",\"source\":#{SOURCE},\"details\":{\"repo\":\"notes\"}}," \
+           "{\"type\":\"artifacts.consumed\",\"source\":#{SOURCE},\"details\":{\"repo\":\"notes\",\"consumes\":[]}}]"
+    events = parse(json)
+    assert_equal %w[artifacts.declared artifacts.consumed], events.map(&:type)
+    assert_equal 'notes', events.first.repo
+  end
+
+  def test_a_bare_object_parses_as_an_array_of_one
+    events = parse("{\"type\":\"artifacts.declared\",\"source\":#{SOURCE},\"details\":{\"repo\":\"notes\"}}")
+    assert_equal 1, events.size
+  end
+
+  def test_legacy_type_names_resolve_through_their_alias
+    json = "[{\"type\":\"release.published\",\"source\":#{SOURCE}," \
+           '"details":{"artifact":"x","version":"v1"}}]'
+    assert_equal 'artifact.released', parse(json).first.type
   end
 
   def test_rejects_unknown_type
-    err = assert_raises(ArgumentError) { Automation::Event.parse('{"type":"thing.happened","source":{},"details":{}}') }
+    err = assert_raises(ArgumentError) { parse("[{\"type\":\"thing.happened\",\"source\":#{SOURCE},\"details\":{}}]") }
     assert_match(/unknown event type "thing.happened"/, err.message)
   end
 
-  def test_rejects_missing_fields
-    json = '{"type":"release.published","source":{"project":"p"},"details":{"producer":"misc"}}'
-    err = assert_raises(ArgumentError) { Automation::Event.parse(json) }
-    assert_equal 'release.published event missing source.pipeline, source.ref, source.sha, details.artifact', err.message
+  def test_rejects_missing_fields_naming_each_one
+    err = assert_raises(ArgumentError) { parse('[{"type":"artifacts.consumed","source":{"project":"p"},"details":{}}]') }
+    assert_equal 'artifacts.consumed event missing source.pipeline, source.ref, source.sha, details.repo, details.consumes',
+                 err.message
   end
 
-  def test_rejects_no_type
-    assert_raises(ArgumentError) { Automation::Event.parse('{"source":{},"details":{}}') }
+  def test_every_catalogue_entry_has_a_handler
+    assert_equal Automation::Events.types.sort, Automation::HANDLERS.keys.sort
+  end
+
+  def test_every_alias_resolves_to_a_catalogue_entry
+    Automation::Events::ALIASES.each_value { |target| assert_includes Automation::Events.types, target }
   end
 end
 ##[<] 🤖🤖

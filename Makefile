@@ -27,11 +27,11 @@ shared/ci/make/render.mk:
 ##[<] Docs
 
 ##[>] Graph [genai-include]
-#[what] aggregate per-repo cross-repo-interface declarations over the seeds into deps/deps-graph.yml
+#[what] aggregate per-repo .repo/ declarations into the four generated system graph files
 aggregate:
 	@bin/automation aggregate
 
-#[what] fail if deps/deps-graph.yml drifted from the aggregated interfaces
+#[what] fail if any generated system graph file drifted from the aggregated declarations
 aggregate-check:
 	@bin/automation aggregate --check
 ##[<] Graph
