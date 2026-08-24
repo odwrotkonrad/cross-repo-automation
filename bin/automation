@@ -3,18 +3,23 @@
 Encoding.default_external = Encoding::UTF_8
 
 require 'optparse'
+require 'yaml'
+require 'json'
 require_relative '../lib/automation'
 
 ROOT = File.expand_path('..', __dir__)
-GRAPH = File.join(ROOT, 'deps/deps-graph.yml')
+GRAPH_DIR = ENV['AUTOMATION_GRAPH_DIR'] || File.join(ROOT, '.graph')
 GROUP = 'konradodwrot'
 OWN_REPO = 'cross-repo/automation'
 
 USAGE = <<~USAGE
   usage: automation dispatch [--event-file <json>] [--emit <yaml>] [--graph <yml>]
-         automation graph affected|produces|consumes <vertex> [--graph <yml>]
-         automation aggregate [--local <workspace>] [--out <yml>] [--check]
-         automation regen --repo <repo> --key <PIN_KEY> --tag <vX.Y.Z> [--prev <tag>] [--workdir <dir>] [--dry-run]
+         automation graph affected|produces|consumes|affected-artifacts <uri> [--graph <yml>]
+         automation aggregate [--local <workspace>] [--graph-dir <dir>] [--check]
+         automation graph-write --kinds <artifacts,latest,edges,current> --moved <text> [--dry-run]
+         automation desired-write --versions <json> --moved <text> [--dry-run]
+         automation vars-write --artifact <uri> --key <KEY> --tag <vX.Y.Z> [--dry-run]
+         automation regen --repo <repo> --key <PIN_KEY> --tag <vX.Y.Z> [--prev <tag>] [--record-only] [--workdir <dir>] [--dry-run]
          automation sweep [--group <group>] [--dry-run]
 USAGE
 
@@ -34,22 +39,23 @@ def dispatch(args)
     p.on('--emit PATH') { |v| opts[:emit] = v }
   end
   json = o[:event_file] ? File.read(o[:event_file]) : ENV.fetch('AUTOMATION_EVENT') { abort 'AUTOMATION_EVENT is unset and no --event-file given' }
-  event = Automation::Event.parse(json)
-  yaml = Automation.dispatch(event, graph: Automation::Graph.load(o[:graph] || GRAPH))
+  events = Automation::Event.parse_all(json, catalogue: Automation::Events)
+  yaml = Automation.dispatch(events, graph: load_graph(o[:graph]))
   return print(yaml) unless o[:emit]
 
   File.write(o[:emit], yaml)
-  jobs = yaml.scan(/^regen:(\S+):[A-Z0-9_]+:$/).flatten
-  puts "#{event.type} #{event.summary}: wrote #{o[:emit]} (#{jobs.size} downstream(s): #{jobs.empty? ? 'none' : jobs.join(' ')})"
+  jobs = yaml.scan(/^(?:regen|graph|vars):(\S+):$/).flatten
+  puts "#{events.map(&:type).join(' ')}: wrote #{o[:emit]} (#{jobs.size} job(s): #{jobs.empty? ? 'none' : jobs.join(' ')})"
 end
 
 def graph(args)
   o = parse(args) { |p, opts| p.on('--graph PATH') { |v| opts[:graph] = v } }
   query, vertex = args
   abort USAGE unless vertex
-  g = Automation::Graph.load(o[:graph] || GRAPH)
+  g = load_graph(o[:graph])
   puts case query
        when 'affected' then g.affected(vertex)
+       when 'affected-artifacts' then g.affected_artifacts(vertex)
        when 'produces' then g.produces(vertex)
        when 'consumes' then g.consumes(vertex)
        else abort USAGE
@@ -59,12 +65,65 @@ end
 def aggregate(args)
   o = parse(args) do |p, opts|
     p.on('--local PATH') { |v| opts[:local] = v }
-    p.on('--out PATH') { |v| opts[:out] = v }
+    p.on('--graph-dir PATH') { |v| opts[:graph_dir] = v }
     p.on('--check') { opts[:check] = true }
   end
-  Automation::Aggregate.run(seed_file: File.join(ROOT, 'deps/seed-interfaces.yml'), graph_file: GRAPH,
-                            out: o[:out] || GRAPH, check: o[:check] || false, group: GROUP, local: o[:local],
-                            own: { repo: OWN_REPO, path: File.join(ROOT, Automation::Aggregate::IFACE_PATH) })
+  Automation::Aggregate.run(seed_file: File.join(ROOT, 'deps/seed-interfaces.yml'),
+                            graph_dir: o[:graph_dir] || GRAPH_DIR, check: o[:check] || false,
+                            group: GROUP, local: o[:local], own: { repo: OWN_REPO, root: ROOT },
+                            fetcher: ->(group, repo, path) { CrossRepo::Gitlab.file("#{group}/#{repo}", path) })
+end
+
+#[why] the graph repo is state, not a released artifact: automation reads it at main, never at a pin.
+#   Consumer queries need each repo's produces/consumes, which the graph files deliberately omit,
+#   so the declarations are re-read alongside them.
+def load_graph(path)
+  dir = path || GRAPH_DIR
+  files = File.directory?(dir) ? %i[artifacts edges].map { |k| File.join(dir, Automation::Aggregate::FILES.fetch(k)) } : [dir]
+  files.each { |f| abort "graph not found at #{f}, clone cross-repo/graph or pass --graph" unless File.file?(f) }
+
+  doc = files.each_with_object({}) { |f, all| all.merge!(YAML.safe_load(File.read(f, encoding: 'UTF-8')) || {}) }
+  Automation::Graph.new(doc, repos: aggregated_repos)
+end
+
+def graph_write(args)
+  o = parse(args) do |p, opts|
+    p.on('--kinds LIST') { |v| opts[:kinds] = v.split(',').map(&:to_sym) }
+    p.on('--moved TEXT') { |v| opts[:moved] = v }
+    p.on('--dry-run') { opts[:dry_run] = true }
+  end
+  abort USAGE unless o[:kinds] && o[:moved]
+  puts Automation::GraphWriter.write(aggregated_repos, kinds: o[:kinds], moved: o[:moved], dry_run: o[:dry_run] || false)
+end
+
+def desired_write(args)
+  o = parse(args) do |p, opts|
+    p.on('--versions PATH') { |v| opts[:versions] = v }
+    p.on('--moved TEXT') { |v| opts[:moved] = v }
+    p.on('--dry-run') { opts[:dry_run] = true }
+  end
+  abort USAGE unless o[:versions] && o[:moved]
+  versions = JSON.parse(File.read(o[:versions], encoding: 'UTF-8'))
+  puts Automation::GraphWriter.write_desired(aggregated_repos, versions: versions, moved: o[:moved], dry_run: o[:dry_run] || false)
+end
+
+def vars_write(args)
+  o = parse(args) do |p, opts|
+    p.on('--artifact URI') { |v| opts[:artifact] = v }
+    p.on('--key KEY') { |v| opts[:key] = v }
+    p.on('--tag TAG') { |v| opts[:tag] = v }
+    p.on('--prev TAG') { |v| opts[:prev] = v }
+    p.on('--dry-run') { opts[:dry_run] = true }
+  end
+  abort USAGE unless o[:artifact] && o[:tag]
+  puts Automation::CiVarsWriter.write(aggregated_repos, moved: "#{o[:artifact]} #{o[:tag]}", dry_run: o[:dry_run] || false)
+end
+
+# Re-reads every repo's declarations, the one input both writers derive from.
+def aggregated_repos
+  Automation::Aggregate.collect(seed_file: File.join(ROOT, 'deps/seed-interfaces.yml'), group: GROUP,
+                                local: ENV['AUTOMATION_WORKSPACE'], own: { repo: OWN_REPO, root: ROOT },
+                                fetcher: ->(group, repo, path) { CrossRepo::Gitlab.file("#{group}/#{repo}", path) }).first
 end
 
 def regen(args)
@@ -75,11 +134,12 @@ def regen(args)
     p.on('--prev TAG') { |v| opts[:prev] = v }
     p.on('--workdir DIR') { |v| opts[:workdir] = v }
     p.on('--dry-run') { opts[:dry_run] = true }
+    p.on('--record-only') { opts[:record_only] = true }
   end
   abort USAGE unless o[:repo] && o[:tag] && o[:key]
   abort "regen: --key must be a bare variable name like PROSE_ASSETS_REF, got #{o[:key].inspect}" unless o[:key].match?(/\A[A-Z][A-Z0-9_]*\z/)
   Automation::RegenRunner.new(repo: o[:repo], key: o[:key], tag: o[:tag], prev: o[:prev], workdir: o[:workdir],
-                              dry_run: o[:dry_run] || false, group: GROUP).run
+                              dry_run: o[:dry_run] || false, record_only: o[:record_only] || false, group: GROUP).run
 end
 
 def sweep(args)
@@ -95,6 +155,9 @@ case command
 when 'dispatch' then dispatch(rest)
 when 'graph' then graph(rest)
 when 'aggregate' then aggregate(rest)
+when 'graph-write' then graph_write(rest)
+when 'desired-write' then desired_write(rest)
+when 'vars-write' then vars_write(rest)
 when 'regen' then regen(rest)
 when 'sweep' then sweep(rest)
 else abort USAGE

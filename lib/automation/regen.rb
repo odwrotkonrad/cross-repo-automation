@@ -7,24 +7,32 @@ module Automation
     PIN_GLOB = '*.tfvars'
     SEMVER = /(latest|v?\d+\.\d+\.\d+)/
 
-    Plan = Struct.new(:repo, :key, :tag, :prev, :content_only, :pin_files, :old, :shown_tag, :bump, keyword_init: true) do
+    Plan = Struct.new(:repo, :key, :tag, :prev, :content_only, :record_only, :pin_files, :old, :shown_tag, :bump, keyword_init: true) do
       def label
         Pin.label_of(key)
       end
 
       def scope
+        return 'record' if record_only
+
         content_only ? 'docs-gen' : label
       end
 
       def branch
+        return "record-#{label}-#{shown_tag}" if record_only
+
         content_only ? "docs-gen-#{label}-#{shown_tag}" : "#{label}-#{shown_tag}"
       end
 
       def title
+        return "[automation] chore(record): #{label} #{old} → #{shown_tag}" if record_only
+
         content_only ? "[automation] chore(docs-gen): render at #{label} #{shown_tag}" : "[automation] chore(#{label}): #{old} → #{shown_tag}"
       end
 
       def body
+        return "Records #{label} at #{shown_tag}. Nothing here is built from it, so no build and no release." if record_only
+
         content_only ? "Automated docs regen: rendered at #{label} #{shown_tag}." : "Automated #{label} regen: #{old} → #{shown_tag} (#{bump} bump)."
       end
 
@@ -56,19 +64,19 @@ module Automation
       /(#{Regexp.escape(key)}\s*=\s*")#{SEMVER}"/
     end
 
-    def self.plan(repo:, key:, tag:, files:, prev: nil)
+    def self.plan(repo:, key:, tag:, files:, prev: nil, record_only: false)
       pattern = pin_pattern(key)
       pin_files = files.select { |_, content| content.match?(pattern) }.keys
       if pin_files.empty?
-        return Plan.new(repo: repo, key: key, tag: tag, prev: prev, content_only: true, pin_files: [],
-                        old: prev || 'none', shown_tag: tag, bump: 'patch')
+        return Plan.new(repo: repo, key: key, tag: tag, prev: prev, content_only: true, record_only: record_only,
+                        pin_files: [], old: prev || 'none', shown_tag: tag, bump: 'patch')
       end
 
       old = files.fetch(pin_files.first)[pattern, 2]
       return Skip.new("#{repo}: already pinned to #{shown(old, tag)}") if old.delete_prefix('v') == tag.delete_prefix('v')
 
-      Plan.new(repo: repo, key: key, tag: tag, prev: prev, content_only: false, pin_files: pin_files,
-               old: old, shown_tag: shown(old, tag), bump: bump(old, tag))
+      Plan.new(repo: repo, key: key, tag: tag, prev: prev, content_only: false, record_only: record_only,
+               pin_files: pin_files, old: old, shown_tag: shown(old, tag), bump: bump(old, tag))
     end
 
     def self.shown(old, tag)

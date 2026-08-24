@@ -1,8 +1,0 @@
-{
-  "type": "ci-var.changed",
-  "source": {"project": "konradodwrot/cross-repo/infra/iac", "pipeline": "2780600000", "ref": "main", "sha": "a1b2c3d4"},
-  "details": {"variables": [
-    {"key": "GRP_KO_VAR_PROSE_ASSETS_REF", "from": "v0.0.44", "to": "v0.0.45"},
-    {"key": "GRP_KO_VAR_ARTIFACT_REGISTRY", "from": "old.example/reg", "to": "new.example/reg"}
-  ]}
-}

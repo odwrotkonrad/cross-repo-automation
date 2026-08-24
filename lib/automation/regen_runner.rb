@@ -24,13 +24,14 @@ module Automation
       [username, "#{id}-#{username}@noreply.gitlab.com"]
     end
 
-    def initialize(repo:, key:, tag:, prev: nil, workdir: nil, dry_run: false, group: 'konradodwrot')
+    def initialize(repo:, key:, tag:, prev: nil, workdir: nil, dry_run: false, record_only: false, group: 'konradodwrot')
       @repo = repo
       @key = key
       @tag = tag
       @prev = prev
       @workdir = workdir
       @dry_run = dry_run
+      @record_only = record_only
       @group = group
       @project = CGI.escape("#{group}/#{repo}")
     end
@@ -38,7 +39,7 @@ module Automation
     def run
       abort 'regen --dry-run needs --workdir <checkout> (no clone in dry-run)' if @dry_run && @workdir.nil?
       clone unless @workdir
-      plan = Regen.plan(repo: @repo, key: @key, tag: @tag, prev: @prev, files: pin_files)
+      plan = Regen.plan(repo: @repo, key: @key, tag: @tag, prev: @prev, files: pin_files, record_only: @record_only)
       return puts(plan.message) if plan.is_a?(Regen::Skip)
       return print_plan(plan) if @dry_run
 

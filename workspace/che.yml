@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=https://gitlab.com/konradodwrot/go-modules/-/raw/main/che/assets/data/che.schema.json
+# yaml-language-server: $schema=https://gitlab.com/api/v4/projects/konradodwrot%2Fgo-modules/packages/generic/che-schema/v0.0.1-che-min-v0.0.96/che.schema.json
 ##[>] 🤖🤖
 #[why] gated on real auth, not on one mechanism for it: glab reads its credential from its own config (host) or $GITLAB_TOKEN (sandbox image build, CI), and this asks whether either actually works
 #[why] `glab api /user`, not `glab auth status`: status exits 0 even when the token is rejected 401, so it answers "is a token configured", not "does it authenticate"

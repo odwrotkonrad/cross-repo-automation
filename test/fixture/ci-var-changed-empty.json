@@ -1,5 +1,0 @@
-{
-  "type": "ci-var.changed",
-  "source": {"project": "konradodwrot/cross-repo/infra/iac", "pipeline": "2780600001", "ref": "main", "sha": "a1b2c3d5"},
-  "details": {"variables": []}
-}

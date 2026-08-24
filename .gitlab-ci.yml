@@ -31,12 +31,13 @@ default:
 
 variables:
   ARTIFACT_REGISTRY: $GRP_KO_VAR_ARTIFACT_REGISTRY
-  CI_IMAGES_REF: $GRP_KO_VAR_CI_IMAGES_REF
+  OCI_IMAGES_CI_LINUX_REF: $GRP_KO_VAR_OCI_IMAGES_CI_LINUX_REF
+  CHE_SCHEMA_REF: $GRP_KO_VAR_CHE_SCHEMA_REF
   PROSE_SPEC_REF: $GRP_KO_VAR_PROSE_SPEC_REF
   PROSE_ASSETS_REF: $GRP_KO_VAR_PROSE_ASSETS_REF
-  CONFIGS_REF: $GRP_KO_VAR_CONFIGS_REF
+  AI_CONFIGS_REF: $GRP_KO_VAR_AI_CONFIGS_REF
   MISC_REF: $GRP_KO_VAR_MISC_REF
-  CI_IMAGE: $ARTIFACT_REGISTRY/ci-linux:$CI_IMAGES_REF
+  CI_IMAGE: $ARTIFACT_REGISTRY/ci-linux:$OCI_IMAGES_CI_LINUX_REF
 
 validate-pre-commit-all:
   tags:
@@ -47,6 +48,20 @@ validate-pre-commit-all:
     - if: $CI_PIPELINE_SOURCE == "pipeline"
       when: never
     - when: on_success
+      changes:
+        - .gitlab-ci.yml
+        - .env.tpl
+        - che.yml
+        - Makefile
+        - lefthook.yml
+        - .repo/*.tpl
+        - .repo/dependency-graph.yml
+        - .repo/artifacts-consumed.yml
+        - bin/**/*
+        - lib/**/*
+        - test/**/*
+        - workspace/**/*
+        - README.md
   script:
     - make repo-ci-precommit-all
     - git diff --exit-code HEAD
@@ -60,7 +75,22 @@ validate-deps-graph:
     - if: $CI_PIPELINE_SOURCE == "pipeline"
       when: never
     - when: on_success
+      changes:
+        - bin/**/*
+        - lib/**/*
+        - .gitlab-ci.yml
+  #[why] the group's read-only token, not the maintainer one dispatch-event uses: this job only
+  #   reads declarations, and the write token is protected, so on an MR branch it resolves empty.
+  #   Unauthenticated every private repo 404s, which the reader takes as "declares nothing": the
+  #   repo vanishes from the aggregate and the job reports drift against a graph that is correct
+  #[why] the graph lives in its own repo and GraphWriter commits to it through the API, so nothing
+  #   ever puts it on disk here. Without this clone the default --graph-dir (.graph) is an empty
+  #   path, every generated file compares against nothing, and the job reports drift unconditionally
+  variables:
+    AUTOMATION_GITLAB_TOKEN: $GRP_KO_VAR_GITLAB_TOKEN
+    AUTOMATION_GRAPH_DIR: $CI_PROJECT_DIR/.graph
   script:
+    - git clone --depth 1 "https://gitlab-ci-token:${AUTOMATION_GITLAB_TOKEN}@gitlab.com/konradodwrot/cross-repo/graph.git" "$AUTOMATION_GRAPH_DIR"
     - make aggregate-check
 
 test-ruby:
@@ -72,6 +102,11 @@ test-ruby:
     - if: $CI_PIPELINE_SOURCE == "pipeline"
       when: never
     - when: on_success
+      changes:
+        - bin/**/*
+        - lib/**/*
+        - test/**/*
+        - Makefile
   script:
     - make test
 
@@ -113,9 +148,16 @@ tag-mint:
   image: $CI_IMAGE
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        - bin/**/*
+        - lib/**/*
+        - workspace/**/*
+        - che.yml
+        - Makefile
   variables:
     GIT_DEPTH: "0"
     TAG_TOKEN: $REPO_VAR_TAG_TOKEN
   script:
     - make tag-mint
+
 ##[<] 🤖🤖

@@ -1,0 +1,10 @@
+##[>] 🤖
+dependsOn:
+  gitlab.com/konradodwrot/go-modules/che: []
+  gitlab.com/konradodwrot/configs:
+    - gitlab.com/konradodwrot/go-modules/che
+  gitlab.com/konradodwrot/cross-repo/prose/assets: []
+  registry/ci-linux:
+    - gitlab.com/konradodwrot/go-modules/che
+  registry/ci-linux-dind: []
+##[<] 🤖

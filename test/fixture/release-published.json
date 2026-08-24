@@ -1,5 +1,0 @@
-{
-  "type": "release.published",
-  "source": {"project": "konradodwrot/cross-repo/prose/assets", "pipeline": "2780561771", "ref": "v0.0.45", "sha": "2cc2576a"},
-  "details": {"producer": "prose-assets", "artifact": "cross-repo/prose/assets"}
-}

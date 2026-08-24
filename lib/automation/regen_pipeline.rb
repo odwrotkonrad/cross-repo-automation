@@ -2,19 +2,23 @@
 require 'json'
 
 module Automation
-  # RegenPipeline renders regen jobs as the child pipeline YAML regen-fan-out runs.
+  # RegenPipeline renders handler jobs as the child pipeline YAML regen-fan-out runs.
   module RegenPipeline
-    Job = Struct.new(:repo, :key, :tag, :prev, keyword_init: true)
+    Job = Struct.new(:repo, :key, :tag, :prev, :record_only, keyword_init: true)
+    GraphJob = Struct.new(:kinds, :moved, keyword_init: true)
+    VarsJob = Struct.new(:artifact, :key, :tag, :prev, keyword_init: true)
+    DesiredJob = Struct.new(:versions, :moved, keyword_init: true)
 
-    IMAGE = '$ARTIFACT_REGISTRY/ci-linux:$CI_IMAGES_REF'
+    IMAGE = '$ARTIFACT_REGISTRY/ci-linux:$OCI_IMAGES_CI_LINUX_REF'
     RUNNER_TAG = 'gke-linux-amd64-small'
 
     HEADER = <<~YAML
       stages: [regen]
       variables:
         ARTIFACT_REGISTRY: $GRP_KO_VAR_ARTIFACT_REGISTRY
-        CI_IMAGES_REF: $GRP_KO_VAR_CI_IMAGES_REF
+        OCI_IMAGES_CI_LINUX_REF: $GRP_KO_VAR_OCI_IMAGES_CI_LINUX_REF
         CONFIGS_REF: $GRP_KO_VAR_CONFIGS_REF
+        AI_CONFIGS_REF: $GRP_KO_VAR_AI_CONFIGS_REF
         AUTOMATION_REF: $GRP_KO_VAR_AUTOMATION_REF
         MISC_REF: $GRP_KO_VAR_MISC_REF
         PROSE_ASSETS_REF: $GRP_KO_VAR_PROSE_ASSETS_REF
@@ -24,22 +28,54 @@ module Automation
     YAML
 
     def self.render(jobs, empty_reason:)
-      body = jobs.empty? ? noop(empty_reason) : jobs.map { |j| regen(j) }.join
+      body = jobs.empty? ? noop(empty_reason) : jobs.map { |j| job_yaml(j) }.join
       HEADER + body
+    end
+
+    def self.job_yaml(job)
+      case job
+      when GraphJob then graph(job)
+      when VarsJob then vars(job)
+      when DesiredJob then desired(job)
+      else regen(job)
+      end
     end
 
     def self.regen(job)
       script = "bin/automation regen --repo #{job.repo} --key #{job.key} --tag #{job.tag}"
       script += " --prev #{job.prev}" if job.prev
+      script += ' --record-only' if job.record_only
+      wrap("regen:#{job.repo}:#{job.key}", script, token: true)
+    end
+
+    def self.graph(job)
+      wrap("graph:#{job.kinds.join('+')}", "bin/automation graph-write --kinds #{job.kinds.join(',')} --moved #{job.moved.inspect}", token: true)
+    end
+
+    #[why] the payload is one version per artifact per consumer, past what a command line holds:
+    #   the job writes it to a file and the CLI reads it back
+    def self.desired(job)
+      payload = job.versions.to_json.gsub("'", %q('"'"'))
+      script = "printf '%s' '#{payload}' > desired-versions.json && " \
+               "bin/automation desired-write --versions desired-versions.json --moved #{job.moved.inspect}"
+      wrap('graph:desired', script, token: true)
+    end
+
+    def self.vars(job)
+      script = "bin/automation vars-write --artifact #{job.artifact} --key #{job.key} --tag #{job.tag}"
+      script += " --prev #{job.prev}" if job.prev
+      wrap("vars:#{job.key}", script, token: true)
+    end
+
+    def self.wrap(name, script, token:)
+      credentials = token ? "  variables:\n    AUTOMATION_GITLAB_TOKEN: $REPO_VAR_AUTOMATION_GITLAB_TOKEN\n    AUTOMATION_REVIEWER: $REPO_VAR_AUTOMATION_REVIEWER\n" : ''
       <<~YAML
-        regen:#{job.repo}:#{job.key}:
+        #{name}:
           stage: regen
           image: #{IMAGE}
           tags:
             - #{RUNNER_TAG}
-          variables:
-            AUTOMATION_GITLAB_TOKEN: $REPO_VAR_AUTOMATION_GITLAB_TOKEN
-            AUTOMATION_REVIEWER: $REPO_VAR_AUTOMATION_REVIEWER
+        #{credentials.chomp}
           script:
             - #{script.to_json}
       YAML
