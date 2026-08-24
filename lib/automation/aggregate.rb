@@ -241,22 +241,34 @@ module Automation
       write_graphs(repos, graph_dir: graph_dir, check: check, declared: declared, seeded: seeded)
     end
 
+    #[why] a line diff, not just the filename: "drifted" alone says nothing about which repo or
+    #   version moved, and every past investigation had to reproduce the run by hand to find out.
+    #   Missing lines mean a repo dropped out of the aggregate, changed lines mean a real version move
+    def self.drift_report(name, current, generated)
+      want = generated.lines
+      have = current.lines
+      ["--- #{name} (committed)", "+++ #{name} (generated)",
+       *(have - want).map { |l| "-#{l.chomp}" }, *(want - have).map { |l| "+#{l.chomp}" }]
+    end
+
     def self.write_graphs(repos, graph_dir:, check:, declared:, seeded:)
       summary = "declared: #{declared.empty? ? 'none' : declared.keys.join(' ')}, seeded: #{seeded} repos"
+      diffs = []
       drifted = FILES.filter_map do |kind, name|
         generated = render(repos, kind: kind)
         path = File.join(graph_dir, name)
         if check
           current = File.file?(path) ? File.read(path, encoding: 'UTF-8') : ''
-          next name if current != generated
+          next nil if current == generated
 
-          nil
-        else
-          File.write(path, generated)
-          nil
+          diffs.concat(drift_report(name, current, generated))
+          next name
         end
+
+        File.write(path, generated)
+        nil
       end
-      abort("#{drifted.join(', ')} drifted, rerun bin/automation aggregate") unless drifted.empty?
+      abort([*diffs, "#{drifted.join(', ')} drifted, rerun bin/automation aggregate"].join("\n")) unless drifted.empty?
       puts check ? "system graph in sync (#{summary})" : "wrote #{FILES.values.join(' ')} (#{summary})"
     end
   end
