@@ -10,11 +10,15 @@ module Automation
     GROUP = 'konradodwrot'
 
     # Renders every consumer's tfvars plus the producers' file, keyed by repo-relative path.
-    def self.files(repos)
+    #[why] released carries the version the triggering release just minted: a producer's
+    #   artifacts-produced.yml renders its version from the group variable, which still names the
+    #   version published *before* this release, so regenerating from declarations alone propagates
+    #   a stale pin and the release never reaches its consumers
+    def self.files(repos, released = {})
       artifacts = Aggregate.artifacts(repos)
       consumers = repos.sort.to_h { |repo, r| [repo, consumer_vars(r, artifacts)] }.reject { |_, v| v.empty? }
       consumers.to_h { |repo, vars| ["live/consumers/#{repo}/generated.auto.tfvars", consumer_file(repo, vars)] }
-               .merge('live/producers/generated.auto.tfvars' => producer_file(repos, artifacts))
+               .merge('live/producers/generated.auto.tfvars' => producer_file(repos, artifacts, released))
     end
 
     # A consumer's variables: its version for every artifact it consumes.
@@ -36,18 +40,19 @@ module Automation
       "#{body.join("\n")}\n"
     end
 
-    # The producers' file: each artifact's latest, determined by the repo that publishes it.
-    def self.producer_file(repos, artifacts)
+    # The producers' file: each artifact's latest, the release that triggered this run winning.
+    def self.producer_file(repos, artifacts, released = {})
       vars = repos.sort.flat_map { |_repo, r| r['produces'] || [] }.filter_map do |entry|
         key = artifacts.dig(entry['uri'], 'versionEnvVar')
-        [key, entry['version']] if key && entry['version']
+        version = released[entry['uri']] || entry['version']
+        [key, version] if key && version
       end.sort.to_h
       render_tfvars("group = #{GROUP.inspect}", vars)
     end
 
-    def self.write(repos, moved:, group: GROUP, writer: nil, dry_run: false)
+    def self.write(repos, moved:, released: {}, group: GROUP, writer: nil, dry_run: false)
       writer ||= RepoWriter.new(repo: REPO, group: group, dry_run: dry_run)
-      writer.write(files(repos), message: "[vars] #{moved}")
+      writer.write(files(repos, released), message: "[vars] #{moved}")
     end
   end
 end
