@@ -79,15 +79,15 @@ validate-deps-graph:
         - bin/**/*
         - lib/**/*
         - .gitlab-ci.yml
-  #[why] the same token dispatch-event uses: this job reads every repo's .repo/ declarations, and
-  #   CI_JOB_TOKEN cannot read another private project. Unauthenticated those reads 404, which the
-  #   reader treats as "declares nothing", so a private repo silently vanishes from the aggregate
-  #   and the job reports drift against a graph that is actually correct
+  #[why] the group's read-only token, not the maintainer one dispatch-event uses: this job only
+  #   reads declarations, and the write token is protected, so on an MR branch it resolves empty.
+  #   Unauthenticated every private repo 404s, which the reader takes as "declares nothing": the
+  #   repo vanishes from the aggregate and the job reports drift against a graph that is correct
   #[why] the graph lives in its own repo and GraphWriter commits to it through the API, so nothing
   #   ever puts it on disk here. Without this clone the default --graph-dir (.graph) is an empty
   #   path, every generated file compares against nothing, and the job reports drift unconditionally
   variables:
-    AUTOMATION_GITLAB_TOKEN: $REPO_VAR_AUTOMATION_GITLAB_TOKEN
+    AUTOMATION_GITLAB_TOKEN: $GRP_KO_VAR_GITLAB_TOKEN
     AUTOMATION_GRAPH_DIR: $CI_PROJECT_DIR/.graph
   script:
     - git clone --depth 1 "https://gitlab-ci-token:${AUTOMATION_GITLAB_TOKEN}@gitlab.com/konradodwrot/cross-repo/graph.git" "$AUTOMATION_GRAPH_DIR"
