@@ -1,5 +1,6 @@
 ##[>] 🤖🤖
 require 'yaml'
+require 'fileutils'
 require_relative 'cycle'
 
 module Automation
@@ -253,6 +254,10 @@ module Automation
 
     def self.write_graphs(repos, graph_dir:, check:, declared:, seeded:)
       summary = "declared: #{declared.empty? ? 'none' : declared.keys.join(' ')}, seeded: #{seeded} repos"
+      #[why] the default graph dir is .graph, which no clone carries and nothing else creates: without
+      #   this a write run crashes on ENOENT the first time it runs in a fresh checkout, which is
+      #   every CI run of dispatch-event
+      FileUtils.mkdir_p(graph_dir) unless check
       diffs = []
       drifted = FILES.filter_map do |kind, name|
         generated = render(repos, kind: kind)

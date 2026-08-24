@@ -116,7 +116,11 @@ def vars_write(args)
     p.on('--dry-run') { opts[:dry_run] = true }
   end
   abort USAGE unless o[:artifact] && o[:tag]
-  puts Automation::CiVarsWriter.write(aggregated_repos, moved: "#{o[:artifact]} #{o[:tag]}", dry_run: o[:dry_run] || false)
+  #[why] the moved artifact takes its version from the tag, never from its own declaration: that file
+  #   records the version published before this release, so without this the pin never advances
+  puts Automation::CiVarsWriter.write(aggregated_repos, moved: "#{o[:artifact]} #{o[:tag]}",
+                                                        released: { o[:artifact] => o[:tag] },
+                                                        dry_run: o[:dry_run] || false)
 end
 
 # Re-reads every repo's declarations, the one input both writers derive from.
