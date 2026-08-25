@@ -52,6 +52,21 @@ class DispatchTest < Minitest::Test
     assert_equal ['vars:PROSE_ASSETS_REF'], job_names(doc)
   end
 
+  #[why] a child pipeline checks out a clean tree, and shared/ci/ruby is gitignored (rendered from
+  #   cross-repo/misc), so a generated job that calls bin/automation without rendering it first dies
+  #   with `cannot load such file -- artifact`. The parent jobs never hit this: `make aggregate`
+  #   runs che, which renders the payload as a side effect
+  def test_every_generated_job_renders_the_shared_payload_before_running
+    doc = dispatch(event('artifact.released', { 'artifact' => { 'uri' => ASSETS, 'versionEnvVar' => 'PROSE_ASSETS_REF' },
+                                                'version' => 'v0.0.61', 'prev' => 'v0.0.60' }))
+    job_names(doc).each do |name|
+      script = doc.fetch(name).fetch('script')
+      assert_equal 'che render-templates --profiles=bootstrapCrossRepoCI', script.first,
+                   "#{name} must render shared/ci/ruby before calling bin/automation"
+      assert script.any? { |s| s.start_with?('bin/automation') }, "#{name} runs no automation command"
+    end
+  end
+
   def test_an_upstream_nothing_depends_on_fans_out_record_only_regens
     doc = dispatch(event('ci-variable.updated',
                          { 'variables' => [{ 'key' => 'GRP_KO_VAR_PROSE_ASSETS_REF', 'from' => 'v0.0.60', 'to' => 'v0.0.61' }] }))
