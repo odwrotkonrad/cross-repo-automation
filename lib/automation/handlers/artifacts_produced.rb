@@ -8,7 +8,7 @@ module Automation
       end
 
       def self.summary(event)
-        (event.details['produces'] || []).map { |e| "#{e['artifact']} #{e['version']}" }.join(', ')
+        (event.details['downstream'] || []).map { |e| "#{e['artifact']} #{e['version']}" }.join(', ')
       end
     end
   end

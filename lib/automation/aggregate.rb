@@ -6,10 +6,11 @@ require_relative 'cycle'
 module Automation
   # Aggregate merges every repo's .repo/ declarations into the system graph files.
   module Aggregate
-    GRAPH_PATH = '.repo/dependency-graph.yml'
-    PRODUCED_PATH = '.repo/artifacts-produced.yml'
-    CONSUMED_PATH = '.repo/artifacts-consumed.yml'
-    PATHS = [GRAPH_PATH, PRODUCED_PATH, CONSUMED_PATH].freeze
+    GRAPH_PATH = '.repo/deps-graph.yml'
+    DOWNSTREAM_PATH = '.repo/downstream.yml'
+    UPSTREAM_PATH = '.repo/upstream.yml'
+    UPSTREAM_ENV_PATH = '.repo/upstream.env'
+    PATHS = [GRAPH_PATH, DOWNSTREAM_PATH, UPSTREAM_PATH].freeze
 
     #[why] desired is absent: ci-variables owns it, publishing it from the variables it applies.
     #   Aggregation runs with no GitLab token, so it cannot read the applied state.
@@ -32,7 +33,7 @@ module Automation
     # Each uri mapped to every [repo, definition] pair producing it, so disagreement stays visible.
     def self.definitions(repos)
       repos.sort.each_with_object(Hash.new { |h, k| h[k] = [] }) do |(repo, r), all|
-        (r['produces'] || []).each { |e| all[e.fetch('uri')] << [repo, e.slice(*STATIC_FIELDS)] }
+        (r['downstream'] || []).each { |e| all[e.fetch('uri')] << [repo, e.slice(*STATIC_FIELDS)] }
       end
     end
 
@@ -46,11 +47,11 @@ module Automation
     end
 
     def self.produced(repos)
-      repos.flat_map { |repo, r| (r['produces'] || []).map { |e| [e.fetch('uri'), repo, e['version']] } }
+      repos.flat_map { |repo, r| (r['downstream'] || []).map { |e| [e.fetch('uri'), repo, e['version']] } }
     end
 
     def self.consumed(repos)
-      repos.flat_map { |repo, r| (r['consumes'] || []).map { |e| [e.fetch('uri'), repo, e['version']] } }
+      repos.flat_map { |repo, r| (r['upstream'] || []).map { |e| [e.fetch('uri'), repo, e['version']] } }
     end
 
     def self.inconsistencies(repos)
@@ -75,7 +76,7 @@ module Automation
     #   authorship of another repo's artifact and hang its upstreams off the wrong vertex
     def self.foreign_edge_keys(repos)
       repos.flat_map do |repo, r|
-        mine = (r['produces'] || []).map { |e| e.fetch('uri') }
+        mine = (r['downstream'] || []).map { |e| e.fetch('uri') }
         ((r['dependsOn'] || {}).keys - NON_ARTIFACT_KEYS - mine)
           .map { |uri| "#{repo} keys a dependsOn edge on #{uri}, which it does not produce" }
       end
@@ -94,7 +95,7 @@ module Automation
     def self.reference_gaps(repos, all)
       repos.sort.flat_map do |repo, r|
         edges = r['dependsOn'] || {}
-        referenced = (r['produces'] || []).map { |e| e['uri'] } + (r['consumes'] || []).map { |e| e['uri'] } +
+        referenced = (r['downstream'] || []).map { |e| e['uri'] } + (r['upstream'] || []).map { |e| e['uri'] } +
                      (edges.keys - NON_ARTIFACT_KEYS) + edges.values.flatten.map { |u| u.is_a?(Hash) ? u['uri'] : u }
         referenced.uniq.reject { |uri| all.key?(uri) }.map { |uri| "#{repo} references #{uri}, which no repo produces" }
       end
@@ -113,7 +114,7 @@ module Automation
     def self.undeclared(repos)
       repos.sort.flat_map do |repo, r|
         declared = (r['dependsOn'] || {}).keys
-        (r['produces'] || []).map { |e| e.fetch('uri') }.reject { |uri| declared.include?(uri) }
+        (r['downstream'] || []).map { |e| e.fetch('uri') }.reject { |uri| declared.include?(uri) }
                              .map { |uri| "#{repo} produces #{uri} with no dependsOn entry" }
       end
     end
@@ -122,7 +123,7 @@ module Automation
     def self.uncovered(repos)
       repos.sort.flat_map do |repo, r|
         covered = (r['dependsOn'] || {}).values.flatten.map { |u| u.is_a?(Hash) ? u['uri'] : u }
-        (r['consumes'] || []).map { |e| e.fetch('uri') }.reject { |uri| covered.include?(uri) }
+        (r['upstream'] || []).map { |e| e.fetch('uri') }.reject { |uri| covered.include?(uri) }
                              .map { |uri| "#{repo} consumes #{uri}, which no dependsOn edge names" }
       end
     end
@@ -203,18 +204,40 @@ module Automation
       Dir.glob(File.join(workspace, '**', GRAPH_PATH)).map { |f| f.delete_prefix("#{workspace}/").delete_suffix("/#{GRAPH_PATH}") }
     end
 
-    # Reads one repo's three declaration files, merging them into the single shape the graph consumes.
+    # Reads one repo's declaration files, merging them into the single shape the graph consumes.
     def self.read_local(root)
-      PATHS.each_with_object({}) do |rel, doc|
+      doc = PATHS.each_with_object({}) do |rel, acc|
         path = File.join(root, rel)
-        doc.merge!(YAML.safe_load(File.read(path, encoding: 'UTF-8')) || {}) if File.file?(path)
+        acc.merge!(YAML.safe_load(File.read(path, encoding: 'UTF-8')) || {}) if File.file?(path)
       end
+      env_path = File.join(root, UPSTREAM_ENV_PATH)
+      graft_versions(doc, File.file?(env_path) ? File.read(env_path, encoding: 'UTF-8') : nil)
     end
 
     def self.read_remote(group, repo, fetcher)
-      PATHS.each_with_object({}) do |rel, doc|
+      doc = PATHS.each_with_object({}) do |rel, acc|
         body = fetcher.call(group, repo, rel)
-        doc.merge!(YAML.safe_load(body) || {}) if body
+        acc.merge!(YAML.safe_load(body) || {}) if body
+      end
+      graft_versions(doc, fetcher.call(group, repo, UPSTREAM_ENV_PATH))
+    end
+
+    #[why] an upstream entry carries no version of its own: the tracked lockfile is the single record
+    #   of what this repo holds, so the graph's version data is read from it and never from the yml
+    def self.graft_versions(doc, env_body)
+      return doc if doc['upstream'].nil?
+
+      env = parse_env(env_body)
+      doc.merge('upstream' => doc['upstream'].map { |e| e.merge('version' => env[e['versionEnvVar']]) })
+    end
+
+    def self.parse_env(body)
+      body.to_s.each_line.with_object({}) do |line, env|
+        line = line.strip
+        next if line.empty? || line.start_with?('#')
+
+        key, value = line.split('=', 2)
+        env[key] = value.to_s
       end
     end
 

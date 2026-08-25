@@ -45,7 +45,7 @@ module Automation
 
       plan.render_env.each { |k, v| ENV[k] = v }
       close_stale_mrs(plan)
-      plan.pin_files.each { |f| File.write(path(f), Regen.rewrite_pin(File.read(path(f)), plan)) }
+      plan.pin_files.each { |f| File.write(path(f), Regen.rewrite_pin(File.read(path(f)), plan, f)) }
       render
       git('checkout', '-b', plan.branch)
       git('add', '-A')
@@ -78,7 +78,8 @@ module Automation
     end
 
     def pin_files
-      git('ls-files', '--', Regen::PIN_GLOB, "**/#{Regen::PIN_GLOB}").lines(chomp: true)
+      globs = Regen::PIN_GLOBS.flat_map { |g| [g, "**/#{g}"] }
+      git('ls-files', '--', *globs).lines(chomp: true)
          .select { |f| File.file?(path(f)) }
          .to_h { |f| [f, File.read(path(f))] }
     end

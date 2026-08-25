@@ -9,14 +9,14 @@ class CiVarsWriterTest < Minitest::Test
   def repos
     {
       'cross-repo/misc' => {
-        'produces' => [{ 'uri' => MISC, 'type' => 'gitRepository', 'versionEnvVar' => 'MISC_REF',
+        'downstream' => [{ 'uri' => MISC, 'type' => 'gitRepository', 'versionEnvVar' => 'MISC_REF',
                          'version' => 'v0.0.30' }],
         'dependsOn' => { MISC => [] }
       },
       'go-modules' => {
-        'produces' => [{ 'uri' => CHE, 'type' => 'goModule', 'versionEnvVar' => 'GO_MODULES_CHE_REF',
+        'downstream' => [{ 'uri' => CHE, 'type' => 'goModule', 'versionEnvVar' => 'GO_MODULES_CHE_REF',
                          'version' => 'che/v0.0.96' }],
-        'consumes' => [{ 'uri' => MISC, 'type' => 'gitRepository', 'version' => 'v0.0.30' }],
+        'upstream' => [{ 'uri' => MISC, 'type' => 'gitRepository', 'version' => 'v0.0.30' }],
         'dependsOn' => { CHE => [] }
       }
     }

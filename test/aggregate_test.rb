@@ -1,6 +1,7 @@
 ##[>] 🤖🤖
 require 'minitest/autorun'
 require 'automation'
+require 'tmpdir'
 
 class AggregateTest < Minitest::Test
   ASSETS = 'gitlab.com/konradodwrot/cross-repo/prose/assets'.freeze
@@ -19,18 +20,18 @@ class AggregateTest < Minitest::Test
   def repos
     {
       'cross-repo/prose/assets' => {
-        'produces' => [produces(ASSETS, 'gitRepository', 'PROSE_ASSETS_REF', 'v0.0.60')],
+        'downstream' => [produces(ASSETS, 'gitRepository', 'PROSE_ASSETS_REF', 'v0.0.60')],
         'dependsOn' => { ASSETS => [] }
       },
       'cross-repo/infra/oci-images' => {
-        'produces' => [produces(CI_LINUX, 'ociImage', 'OCI_IMAGES_CI_LINUX_REF', 'v0.0.124'),
+        'downstream' => [produces(CI_LINUX, 'ociImage', 'OCI_IMAGES_CI_LINUX_REF', 'v0.0.124'),
                        produces(DIND, 'ociImage', 'OCI_IMAGES_CI_LINUX_DIND_REF', 'v0.0.124')],
-        'consumes' => [ref(CHE, 'goModule', 'che/v0.0.94'), ref(ASSETS, 'gitRepository', 'v0.0.60')],
+        'upstream' => [ref(CHE, 'goModule', 'che/v0.0.94'), ref(ASSETS, 'gitRepository', 'v0.0.60')],
         'dependsOn' => { CI_LINUX => [ref(CHE, 'goModule')], DIND => [],
                          'ciEnv' => [ref(ASSETS, 'gitRepository')] }
       },
       'go-modules' => {
-        'produces' => [produces(CHE, 'goModule', 'GO_MODULES_CHE_REF', 'che/v0.0.94')],
+        'downstream' => [produces(CHE, 'goModule', 'GO_MODULES_CHE_REF', 'che/v0.0.94')],
         'dependsOn' => { CHE => [] }
       }
     }
@@ -47,7 +48,7 @@ class AggregateTest < Minitest::Test
   def test_reserved_keys_name_no_edge_and_still_cover_what_they_consume
     reserved = repos.merge(
       'notes' => {
-        'consumes' => [ref(ASSETS, 'gitRepository', 'v0.0.60'), ref(CHE, 'goModule', 'che/v0.0.94')],
+        'upstream' => [ref(ASSETS, 'gitRepository', 'v0.0.60'), ref(CHE, 'goModule', 'che/v0.0.94')],
         'dependsOn' => { 'repoContents' => [ref(ASSETS, 'gitRepository')], 'devEnv' => [ref(CHE, 'goModule')] }
       }
     )
@@ -56,7 +57,7 @@ class AggregateTest < Minitest::Test
   end
 
   def test_a_reference_to_an_undefined_uri_is_named
-    broken = repos.merge('notes' => { 'consumes' => [ref('ghost://thing', 'gitRepository')] })
+    broken = repos.merge('notes' => { 'upstream' => [ref('ghost://thing', 'gitRepository')] })
     assert_includes Automation::Aggregate.inconsistencies(broken),
                     'notes references ghost://thing, which no repo produces'
   end
@@ -65,7 +66,7 @@ class AggregateTest < Minitest::Test
   #   another repo's vertex and hangs upstreams off it
   def test_an_edge_keyed_on_an_artifact_the_repo_does_not_produce_is_named
     squatting = repos.merge('notes' => {
-                              'produces' => [produces('gitlab.com/konradodwrot/notes', 'gitRepository', 'NOTES_REF', 'v0.0.16')],
+                              'downstream' => [produces('gitlab.com/konradodwrot/notes', 'gitRepository', 'NOTES_REF', 'v0.0.16')],
                               'dependsOn' => { 'gitlab.com/konradodwrot/notes' => [], CI_LINUX => [ref(CHE, 'goModule')] }
                             })
     assert_includes Automation::Aggregate.inconsistencies(squatting),
@@ -75,13 +76,13 @@ class AggregateTest < Minitest::Test
   def test_two_artifacts_sharing_one_variable_fail
     shared = repos.dup
     shared['cross-repo/infra/oci-images'] = Marshal.load(Marshal.dump(shared['cross-repo/infra/oci-images']))
-    shared['cross-repo/infra/oci-images']['produces'].find { |e| e['uri'] == DIND }['versionEnvVar'] = 'OCI_IMAGES_CI_LINUX_REF'
+    shared['cross-repo/infra/oci-images']['downstream'].find { |e| e['uri'] == DIND }['versionEnvVar'] = 'OCI_IMAGES_CI_LINUX_REF'
     found = Automation::Aggregate.inconsistencies(shared).grep(/versionEnvVar OCI_IMAGES_CI_LINUX_REF names 2 artifacts/)
     refute_empty found, 'a shared versionEnvVar must fail: this is the CI_IMAGES_REF bug'
   end
 
   def test_two_repos_defining_one_uri_differently_fail
-    disagreeing = repos.merge('notes' => { 'produces' => [produces(CHE, 'goModule', 'CHE_REF', 'che/v0.0.94')],
+    disagreeing = repos.merge('notes' => { 'downstream' => [produces(CHE, 'goModule', 'CHE_REF', 'che/v0.0.94')],
                                            'dependsOn' => { CHE => [] } })
     assert_includes Automation::Aggregate.inconsistencies(disagreeing).join("\n"), 'is defined differently by'
   end
@@ -98,7 +99,7 @@ class AggregateTest < Minitest::Test
 
   def test_undeclared_produced_artifacts_are_the_work_queue
     undeclared = repos.dup
-    undeclared['cross-repo/prose/assets'] = { 'produces' => [produces(ASSETS, 'gitRepository', 'PROSE_ASSETS_REF', 'v1')] }
+    undeclared['cross-repo/prose/assets'] = { 'downstream' => [produces(ASSETS, 'gitRepository', 'PROSE_ASSETS_REF', 'v1')] }
     assert_equal ["cross-repo/prose/assets produces #{ASSETS} with no dependsOn entry"],
                  Automation::Aggregate.undeclared(undeclared)
   end
@@ -131,12 +132,38 @@ class AggregateTest < Minitest::Test
                  current.lines.grep(/^  \S+:/).size, "current must mirror the edge structure"
   end
 
+  #[why] the tracked lockfile is the only record of what a repo holds, so the graph's upstream
+  #   versions must come from it and never from a version field left in the yml
+  def test_upstream_versions_are_read_from_the_tracked_lockfile
+    Dir.mktmpdir do |dir|
+      Dir.mkdir(File.join(dir, '.repo'))
+      File.write(File.join(dir, '.repo', 'upstream.yml'),
+                 { 'upstream' => [{ 'uri' => CHE, 'type' => 'goModule', 'versionEnvVar' => 'GO_MODULES_CHE_REF',
+                                    'version' => 'che/v0.0.1' }] }.to_yaml)
+      File.write(File.join(dir, '.repo', 'upstream.env'), "# a comment\n\nGO_MODULES_CHE_REF=che/v0.0.94\n")
+
+      doc = Automation::Aggregate.read_local(dir)
+      assert_equal 'che/v0.0.94', doc.fetch('upstream').first.fetch('version')
+    end
+  end
+
+  def test_an_upstream_key_absent_from_the_lockfile_reads_as_unversioned
+    Dir.mktmpdir do |dir|
+      Dir.mkdir(File.join(dir, '.repo'))
+      File.write(File.join(dir, '.repo', 'upstream.yml'),
+                 { 'upstream' => [{ 'uri' => CHE, 'type' => 'goModule', 'versionEnvVar' => 'GO_MODULES_CHE_REF' }] }.to_yaml)
+
+      doc = Automation::Aggregate.read_local(dir)
+      assert_nil doc.fetch('upstream').first.fetch('version')
+    end
+  end
+
   #[why] the collapsing aggregator stamped one version on every edge, hiding exactly the repo that lags
   def test_two_consumers_pinning_one_artifact_differently_both_survive
     lagging = repos.dup
     lagging["cross-repo/prose/assets"] = {
-      "produces" => [produces(ASSETS, "gitRepository", "PROSE_ASSETS_REF", "v0.0.60")],
-      "consumes" => [ref(CHE, "goModule", "che/v0.0.90")],
+      "downstream" => [produces(ASSETS, "gitRepository", "PROSE_ASSETS_REF", "v0.0.60")],
+      "upstream" => [ref(CHE, "goModule", "che/v0.0.90")],
       "dependsOn" => { ASSETS => [ref(CHE, "goModule")] }
     }
     current = Automation::Aggregate.render(lagging, kind: :current)

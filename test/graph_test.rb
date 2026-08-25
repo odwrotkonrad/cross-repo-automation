@@ -12,15 +12,15 @@ class GraphTest < Minitest::Test
   DIND = 'registry/ci-linux-dind'.freeze
 
   REPOS = {
-    'go-modules' => { 'produces' => [{ 'uri' => CHE, 'version' => 'che/v0.0.94' }] },
-    'configs' => { 'produces' => [{ 'uri' => CONFIGS, 'version' => 'v0.0.18' }],
-                   'consumes' => [{ 'uri' => CHE, 'version' => 'che/v0.0.94' },
+    'go-modules' => { 'downstream' => [{ 'uri' => CHE, 'version' => 'che/v0.0.94' }] },
+    'configs' => { 'downstream' => [{ 'uri' => CONFIGS, 'version' => 'v0.0.18' }],
+                   'upstream' => [{ 'uri' => CHE, 'version' => 'che/v0.0.94' },
                                   { 'uri' => ASSETS, 'version' => 'v0.0.60' }] },
     'cross-repo/infra/oci-images' => {
-      'produces' => [{ 'uri' => CI_LINUX, 'version' => 'v0.0.124' }, { 'uri' => DIND, 'version' => 'v0.0.124' }],
-      'consumes' => [{ 'uri' => CHE, 'version' => 'che/v0.0.94' }]
+      'downstream' => [{ 'uri' => CI_LINUX, 'version' => 'v0.0.124' }, { 'uri' => DIND, 'version' => 'v0.0.124' }],
+      'upstream' => [{ 'uri' => CHE, 'version' => 'che/v0.0.94' }]
     },
-    'notes' => { 'consumes' => [{ 'uri' => ASSETS, 'version' => 'v0.0.60' }] }
+    'notes' => { 'upstream' => [{ 'uri' => ASSETS, 'version' => 'v0.0.60' }] }
   }.freeze
 
   def fixture_doc
