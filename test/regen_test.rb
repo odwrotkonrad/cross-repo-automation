@@ -62,6 +62,37 @@ class RegenTest < Minitest::Test
     assert_equal %(PROSE_ASSETS_REF = "v0.0.45"\n), Automation::Regen.rewrite_pin(%(PROSE_ASSETS_REF = "v0.0.44"\n), v)
   end
 
+  #[why] the lockfile is what makes a consumer regen a real pin bump: without it every consumer
+  #   planned content_only and opened no MR at all, so a release never reached it
+  def test_a_lockfile_pin_plans_a_real_bump_not_a_content_regen
+    p = plan('MISC_REF', 'v0.0.38', { '.repo/upstream.env' => %(PROSE_ASSETS_REF=v0.0.63\nMISC_REF=v0.0.37\n) })
+    refute p.content_only
+    assert_equal ['.repo/upstream.env'], p.pin_files
+    assert_equal %w[v0.0.37 v0.0.38 patch], [p.old, p.shown_tag, p.bump]
+    assert_equal '[automation] chore(misc): v0.0.37 → v0.0.38', p.title
+    assert p.auto_merge?
+  end
+
+  def test_a_lockfile_pin_rewrites_only_its_own_key_unquoted
+    content = %(PROSE_ASSETS_REF=v0.0.63\nMISC_REF=v0.0.37\n)
+    p = plan('MISC_REF', 'v0.0.38', { '.repo/upstream.env' => content })
+    assert_equal %(PROSE_ASSETS_REF=v0.0.63\nMISC_REF=v0.0.38\n),
+                 Automation::Regen.rewrite_pin(content, p, '.repo/upstream.env')
+  end
+
+  def test_a_lockfile_already_at_the_tag_skips_instead_of_opening_an_empty_mr
+    skip = plan('MISC_REF', 'v0.0.37', { '.repo/upstream.env' => %(MISC_REF=v0.0.37\n) })
+    assert_instance_of Automation::Regen::Skip, skip
+    assert_equal 'cross-repo/infra/iac: already pinned to v0.0.37', skip.message
+  end
+
+  #[why] a key named in the lockfile must not be matched by the tfvars pattern, or a repo holding
+  #   both files would read its pin off the wrong one
+  def test_a_lockfile_key_is_not_matched_in_a_tfvars_file
+    p = plan('MISC_REF', 'v0.0.38', { 'tf/terraform.tfvars' => %(MISC_REF=v0.0.37\n) }, prev: 'v0.0.37')
+    assert p.content_only
+  end
+
   def test_stale_mr_is_literal_same_scope_and_never_a_major_bump
     p = plan('PROSE_ASSETS_REF', 'v0.0.45', { 'a.tfvars' => %(PROSE_ASSETS_REF = "v0.0.44"\n) })
     assert p.stale_mr?('[automation] chore(prose-assets): v0.0.43 → v0.0.44')

@@ -68,7 +68,7 @@ module Automation
     end
 
     def self.wrap(name, script, token:)
-      credentials = token ? "  variables:\n    AUTOMATION_GITLAB_TOKEN: $REPO_VAR_AUTOMATION_GITLAB_TOKEN\n    AUTOMATION_REVIEWER: $REPO_VAR_AUTOMATION_REVIEWER\n" : ''
+      credentials = token ? "  variables:\n    AUTOMATION_GITLAB_TOKEN: $REPO_PROTECTED_VAR_BOT_AUTOMATION_GITLAB_TOKEN\n    AUTOMATION_REVIEWER: $REPO_VAR_AUTOMATION_REVIEWER\n" : ''
       <<~YAML
         #{name}:
           stage: regen

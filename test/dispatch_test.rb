@@ -13,15 +13,15 @@ class DispatchTest < Minitest::Test
   SOURCE = { 'project' => 'konradodwrot/x', 'pipeline' => '1', 'ref' => 'main', 'sha' => 'abc' }.freeze
 
   REPOS = {
-    'go-modules' => { 'produces' => [{ 'uri' => CHE, 'version' => 'che/v0.0.94' }] },
-    'configs' => { 'produces' => [{ 'uri' => CONFIGS, 'version' => 'v0.0.18' }],
-                   'consumes' => [{ 'uri' => CHE, 'version' => 'che/v0.0.94' },
+    'go-modules' => { 'downstream' => [{ 'uri' => CHE, 'version' => 'che/v0.0.94' }] },
+    'configs' => { 'downstream' => [{ 'uri' => CONFIGS, 'version' => 'v0.0.18' }],
+                   'upstream' => [{ 'uri' => CHE, 'version' => 'che/v0.0.94' },
                                   { 'uri' => ASSETS, 'version' => 'v0.0.60' }] },
     'cross-repo/infra/oci-images' => {
-      'produces' => [{ 'uri' => CI_LINUX, 'version' => 'v0.0.124' }, { 'uri' => DIND, 'version' => 'v0.0.124' }],
-      'consumes' => [{ 'uri' => CHE, 'version' => 'che/v0.0.94' }, { 'uri' => ASSETS, 'version' => 'v0.0.60' }]
+      'downstream' => [{ 'uri' => CI_LINUX, 'version' => 'v0.0.124' }, { 'uri' => DIND, 'version' => 'v0.0.124' }],
+      'upstream' => [{ 'uri' => CHE, 'version' => 'che/v0.0.94' }, { 'uri' => ASSETS, 'version' => 'v0.0.60' }]
     },
-    'notes' => { 'consumes' => [{ 'uri' => ASSETS, 'version' => 'v0.0.60' }] }
+    'notes' => { 'upstream' => [{ 'uri' => ASSETS, 'version' => 'v0.0.60' }] }
   }.freeze
 
   def fixture_doc
@@ -69,13 +69,13 @@ class DispatchTest < Minitest::Test
   end
 
   def test_a_produced_record_never_fans_out_a_release
-    doc = dispatch(event('artifacts.produced', { 'repo' => 'notes', 'produces' => [{ 'uri' => ASSETS, 'version' => 'v0.0.61' }] }))
+    doc = dispatch(event('artifacts.produced', { 'repo' => 'notes', 'downstream' => [{ 'uri' => ASSETS, 'version' => 'v0.0.61' }] }))
     assert_equal ['graph:latest+current'], job_names(doc)
     assert_empty job_names(doc).grep(/^regen:/), 'artifacts.produced must emit zero regen jobs: it would loop'
   end
 
   def test_a_consumed_record_moves_the_current_graph_only
-    doc = dispatch(event('artifacts.consumed', { 'repo' => 'notes', 'consumes' => [{ 'uri' => ASSETS, 'version' => 'v0.0.61' }] }))
+    doc = dispatch(event('artifacts.consumed', { 'repo' => 'notes', 'upstream' => [{ 'uri' => ASSETS, 'version' => 'v0.0.61' }] }))
     assert_equal ['graph:current'], job_names(doc)
   end
 
@@ -93,7 +93,7 @@ class DispatchTest < Minitest::Test
 
   def test_one_commit_emitting_two_events_yields_one_pipeline
     doc = dispatch(event('artifacts.declared', { 'repo' => 'notes' }),
-                   event('artifacts.consumed', { 'repo' => 'notes', 'consumes' => [] }))
+                   event('artifacts.consumed', { 'repo' => 'notes', 'upstream' => [] }))
     assert_equal ['graph:artifacts+latest+edges+current', 'graph:current'], job_names(doc)
   end
 

@@ -40,20 +40,20 @@ module Automation
     end
 
     def produces(repo)
-      (@repos.dig(repo, 'produces') || []).map { |e| e.fetch('uri') }
+      (@repos.dig(repo, 'downstream') || []).map { |e| e.fetch('uri') }
     end
 
     def consumes(repo)
-      (@repos.dig(repo, 'consumes') || []).map { |e| e.fetch('uri') }
+      (@repos.dig(repo, 'upstream') || []).map { |e| e.fetch('uri') }
     end
 
     def producer_of(uri)
-      @repos.find { |_repo, r| (r['produces'] || []).any? { |e| e['uri'] == uri } }&.first
+      @repos.find { |_repo, r| (r['downstream'] || []).any? { |e| e['uri'] == uri } }&.first
     end
 
     # Repos consuming +uri+, whatever they do with it. The producing repo is excluded.
     def affected(uri)
-      @repos.select { |_repo, r| (r['consumes'] || []).any? { |e| e['uri'] == uri } }
+      @repos.select { |_repo, r| (r['upstream'] || []).any? { |e| e['uri'] == uri } }
             .keys.reject { |repo| repo == producer_of(uri) }.sort
     end
 

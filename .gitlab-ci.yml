@@ -55,8 +55,9 @@ validate-pre-commit-all:
         - Makefile
         - lefthook.yml
         - .repo/*.tpl
-        - .repo/dependency-graph.yml
-        - .repo/artifacts-consumed.yml
+        - .repo/deps-graph.yml
+        - .repo/upstream.yml
+        - .repo/upstream.env
         - bin/**/*
         - lib/**/*
         - test/**/*
@@ -87,7 +88,7 @@ validate-deps-graph:
   #   ever puts it on disk here. Without this clone the default --graph-dir (.graph) is an empty
   #   path, every generated file compares against nothing, and the job reports drift unconditionally
   variables:
-    AUTOMATION_GITLAB_TOKEN: $GRP_KO_VAR_GITLAB_TOKEN
+    AUTOMATION_GITLAB_TOKEN: $GRP_KO_UNPROTECTED_VAR_BOT_GITLAB_TOKEN
     AUTOMATION_GRAPH_DIR: $CI_PROJECT_DIR/.graph
   script:
     - git clone --depth 1 "https://gitlab-ci-token:${AUTOMATION_GITLAB_TOKEN}@gitlab.com/konradodwrot/cross-repo/graph.git" "$AUTOMATION_GRAPH_DIR"
@@ -118,7 +119,7 @@ dispatch-event:
   rules:
     - if: $CI_PIPELINE_SOURCE == "pipeline"
   variables:
-    AUTOMATION_GITLAB_TOKEN: $REPO_VAR_AUTOMATION_GITLAB_TOKEN
+    AUTOMATION_GITLAB_TOKEN: $REPO_PROTECTED_VAR_BOT_AUTOMATION_GITLAB_TOKEN
   script:
     - make aggregate
     - make dispatch
@@ -156,7 +157,7 @@ tag-mint:
         - Makefile
   variables:
     GIT_DEPTH: "0"
-    TAG_TOKEN: $REPO_VAR_TAG_TOKEN
+    TAG_TOKEN: $REPO_PROTECTED_VAR_BOT_TAG_TOKEN
   script:
     - make tag-mint
 

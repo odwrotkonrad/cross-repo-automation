@@ -4,7 +4,11 @@ require_relative 'pin'
 module Automation
   # Regen plans one downstream regen: which pin moves, how the bump reads, what the MR says.
   module Regen
-    PIN_GLOB = '*.tfvars'
+    #[why] two pin shapes, one per file kind: iac tracks refs as tfvars assignments, every other repo
+    #   as its .repo/upstream.env lockfile. A consumer with neither has nothing to pin, which is what
+    #   left every regen contentless before the lockfile existed
+    PIN_GLOBS = ['*.tfvars', 'upstream.env'].freeze
+    ENV_PIN_FILE = '.repo/upstream.env'
     SEMVER = /(latest|v?\d+\.\d+\.\d+)/
 
     Plan = Struct.new(:repo, :key, :tag, :prev, :content_only, :record_only, :pin_files, :old, :shown_tag, :bump, keyword_init: true) do
@@ -60,19 +64,24 @@ module Automation
 
     Skip = Struct.new(:message)
 
-    def self.pin_pattern(key)
+    def self.pin_pattern(key, file = nil)
+      return /^(#{Regexp.escape(key)}=)#{SEMVER}$/ if env_pin_file?(file)
+
       /(#{Regexp.escape(key)}\s*=\s*")#{SEMVER}"/
     end
 
+    def self.env_pin_file?(file)
+      file.to_s.end_with?(ENV_PIN_FILE)
+    end
+
     def self.plan(repo:, key:, tag:, files:, prev: nil, record_only: false)
-      pattern = pin_pattern(key)
-      pin_files = files.select { |_, content| content.match?(pattern) }.keys
+      pin_files = files.select { |file, content| content.match?(pin_pattern(key, file)) }.keys
       if pin_files.empty?
         return Plan.new(repo: repo, key: key, tag: tag, prev: prev, content_only: true, record_only: record_only,
                         pin_files: [], old: prev || 'none', shown_tag: tag, bump: 'patch')
       end
 
-      old = files.fetch(pin_files.first)[pattern, 2]
+      old = files.fetch(pin_files.first)[pin_pattern(key, pin_files.first), 2]
       return Skip.new("#{repo}: already pinned to #{shown(old, tag)}") if old.delete_prefix('v') == tag.delete_prefix('v')
 
       Plan.new(repo: repo, key: key, tag: tag, prev: prev, content_only: false, record_only: record_only,
@@ -95,8 +104,9 @@ module Automation
       'patch'
     end
 
-    def self.rewrite_pin(content, plan)
-      content.gsub(pin_pattern(plan.key)) { "#{Regexp.last_match(1)}#{plan.pin_written}\"" }
+    def self.rewrite_pin(content, plan, file = nil)
+      quote = env_pin_file?(file) ? '' : '"'
+      content.gsub(pin_pattern(plan.key, file)) { "#{Regexp.last_match(1)}#{plan.pin_written}#{quote}" }
     end
 
     def self.substantive_diff?(diff)

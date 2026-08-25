@@ -23,7 +23,7 @@ module Automation
 
     # A consumer's variables: its version for every artifact it consumes.
     def self.consumer_vars(declaration, artifacts)
-      (declaration['consumes'] || []).filter_map do |entry|
+      (declaration['upstream'] || []).filter_map do |entry|
         key = artifacts.dig(entry['uri'], 'versionEnvVar')
         [key, entry['version']] if key && entry['version']
       end.sort.to_h
@@ -42,7 +42,7 @@ module Automation
 
     # The producers' file: each artifact's latest, the release that triggered this run winning.
     def self.producer_file(repos, artifacts, released = {})
-      vars = repos.sort.flat_map { |_repo, r| r['produces'] || [] }.filter_map do |entry|
+      vars = repos.sort.flat_map { |_repo, r| r['downstream'] || [] }.filter_map do |entry|
         key = artifacts.dig(entry['uri'], 'versionEnvVar')
         version = released[entry['uri']] || entry['version']
         [key, version] if key && version
