@@ -67,6 +67,12 @@ module Automation
       wrap("vars:#{job.key}", script, token: true)
     end
 
+    #[why] shared/ci/ruby is gitignored, rendered from cross-repo/misc, so a child pipeline's clean
+    #   checkout does not carry it and `require 'artifact'` in lib/automation.rb raises LoadError.
+    #   The parent jobs get it for free because `make aggregate` runs che first; a generated job
+    #   calls bin/automation directly, so it renders the payload itself
+    BOOTSTRAP = 'che render-templates --profiles=bootstrapCrossRepoCI'.freeze
+
     def self.wrap(name, script, token:)
       credentials = token ? "  variables:\n    AUTOMATION_GITLAB_TOKEN: $REPO_PROTECTED_VAR_BOT_AUTOMATION_GITLAB_TOKEN\n    AUTOMATION_REVIEWER: $REPO_VAR_AUTOMATION_REVIEWER\n" : ''
       <<~YAML
@@ -77,6 +83,7 @@ module Automation
             - #{RUNNER_TAG}
         #{credentials.chomp}
           script:
+            - #{BOOTSTRAP.to_json}
             - #{script.to_json}
       YAML
     end
