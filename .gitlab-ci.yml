@@ -1,7 +1,11 @@
 ##[>] 🤖🤖
+#[why] an emitted event arrives as source `api`, not `pipeline`: emit-events.zsh posts to
+#   /projects/:id/pipeline with a PRIVATE-TOKEN header, and only the /trigger/pipeline form (a
+#   per-project trigger token) yields `pipeline`. Both are accepted so a rule keeps matching
+#   whichever transport the emitter uses
 workflow:
   rules:
-    - if: $CI_PIPELINE_SOURCE == "pipeline"
+    - if: $CI_PIPELINE_SOURCE == "pipeline" || $CI_PIPELINE_SOURCE == "api"
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
@@ -45,7 +49,7 @@ validate-pre-commit-all:
   stage: validate
   image: $CI_IMAGE
   rules:
-    - if: $CI_PIPELINE_SOURCE == "pipeline"
+    - if: $CI_PIPELINE_SOURCE == "pipeline" || $CI_PIPELINE_SOURCE == "api"
       when: never
     - when: on_success
       changes:
@@ -73,7 +77,7 @@ validate-deps-graph:
   stage: validate
   image: $CI_IMAGE
   rules:
-    - if: $CI_PIPELINE_SOURCE == "pipeline"
+    - if: $CI_PIPELINE_SOURCE == "pipeline" || $CI_PIPELINE_SOURCE == "api"
       when: never
     - when: on_success
       changes:
@@ -100,7 +104,7 @@ test-ruby:
   stage: validate
   image: $CI_IMAGE
   rules:
-    - if: $CI_PIPELINE_SOURCE == "pipeline"
+    - if: $CI_PIPELINE_SOURCE == "pipeline" || $CI_PIPELINE_SOURCE == "api"
       when: never
     - when: on_success
       changes:
@@ -117,7 +121,7 @@ dispatch-event:
   stage: dispatch
   image: $CI_IMAGE
   rules:
-    - if: $CI_PIPELINE_SOURCE == "pipeline"
+    - if: $CI_PIPELINE_SOURCE == "pipeline" || $CI_PIPELINE_SOURCE == "api"
   variables:
     AUTOMATION_GITLAB_TOKEN: $REPO_PROTECTED_VAR_BOT_AUTOMATION_GITLAB_TOKEN
   script:
@@ -130,7 +134,7 @@ dispatch-event:
 regen-fan-out:
   stage: regen
   rules:
-    - if: $CI_PIPELINE_SOURCE == "pipeline"
+    - if: $CI_PIPELINE_SOURCE == "pipeline" || $CI_PIPELINE_SOURCE == "api"
   needs:
     - dispatch-event
   trigger:
