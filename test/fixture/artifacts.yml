@@ -3,9 +3,9 @@ artifacts:
   gitlab.com/konradodwrot/go-modules/che:
     type: goModule
     versionEnvVar: GO_MODULES_CHE_REF
-  gitlab.com/konradodwrot/configs:
+  gitlab.com/konradodwrot/tools-configs:
     type: gitRepository
-    versionEnvVar: CONFIGS_REF
+    versionEnvVar: TOOLS_CONFIGS_REF
   gitlab.com/konradodwrot/cross-repo/prose/assets:
     type: gitRepository
     versionEnvVar: PROSE_ASSETS_REF

@@ -12,7 +12,7 @@ dependsOn:
     - uri: gitlab.com/konradodwrot/cross-repo/prose/spec
       type: gitRepository
   devEnv:
-    - uri: gitlab.com/konradodwrot/ai-harness/configs
+    - uri: gitlab.com/konradodwrot/ai-harness/ai-tools-configs
       type: gitRepository
     - uri: gitlab.com/konradodwrot/go-modules/che-schema
       type: file

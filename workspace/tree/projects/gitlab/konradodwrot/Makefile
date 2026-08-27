@@ -53,13 +53,13 @@ pipeline-status-main-all:
 ##[<] Multi-Repo
 
 ##[>] Sync [genai-include]
-#[what] configs convenience sync (= configs-sync)
+#[what] tools-configs convenience sync (= tools-configs-sync)
 sync:
-	@$(MAKE) -C $(call repo_dir,configs) sync
+	@$(MAKE) -C $(call repo_dir,tools-configs) sync
 
-#[what] configs full sync, scripts included (= configs-sync-full)
+#[what] tools-configs full sync, scripts included (= tools-configs-sync-full)
 sync-full:
-	@$(MAKE) -C $(call repo_dir,configs) sync-full
+	@$(MAKE) -C $(call repo_dir,tools-configs) sync-full
 ##[<] Sync
 
 .PHONY: init-note commit-all mr-all publish-all pipeline-status-mr-all pipeline-status-main-all sync sync-full
