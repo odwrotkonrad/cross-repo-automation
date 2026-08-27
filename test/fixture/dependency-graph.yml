@@ -1,7 +1,7 @@
 ##[>] 🤖
 dependsOn:
   gitlab.com/konradodwrot/go-modules/che: []
-  gitlab.com/konradodwrot/configs:
+  gitlab.com/konradodwrot/tools-configs:
     - gitlab.com/konradodwrot/go-modules/che
   gitlab.com/konradodwrot/cross-repo/prose/assets: []
   registry/ci-linux:

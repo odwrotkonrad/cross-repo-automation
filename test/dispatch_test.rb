@@ -7,7 +7,7 @@ class DispatchTest < Minitest::Test
   FIXTURE = File.expand_path('fixture', __dir__)
   CHE = 'gitlab.com/konradodwrot/go-modules/che'.freeze
   ASSETS = 'gitlab.com/konradodwrot/cross-repo/prose/assets'.freeze
-  CONFIGS = 'gitlab.com/konradodwrot/configs'.freeze
+  CONFIGS = 'gitlab.com/konradodwrot/tools-configs'.freeze
   CI_LINUX = 'registry/ci-linux'.freeze
   DIND = 'registry/ci-linux-dind'.freeze
   SOURCE = { 'project' => 'konradodwrot/x', 'pipeline' => '1', 'ref' => 'main', 'sha' => 'abc' }.freeze
