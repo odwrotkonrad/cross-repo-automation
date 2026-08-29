@@ -7,7 +7,7 @@
 /assets/data/repo-structure.md
 /assets/docs-agents/purpose.md
 regen-pipeline.yml
-#[why] shared render + tagging payload: authored in cross-repo/misc, rendered here, never tracked
 /shared/
 /.env
+/lefthook.yml
 ##[<] 🤖

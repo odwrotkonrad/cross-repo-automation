@@ -2,13 +2,11 @@
 dependsOn:
   gitlab.com/konradodwrot/cross-repo/automation: []
   ciEnv:
-    - uri: gitlab.com/konradodwrot/cross-repo/misc
+    - uri: gitlab.com/konradodwrot/centralized/assets/generic
       type: gitRepository
     - uri: us-central1-docker.pkg.dev/staging-499418/ci/ci-linux
       type: ociImage
   repoContents:
-    - uri: gitlab.com/konradodwrot/cross-repo/prose/assets
-      type: gitRepository
     - uri: gitlab.com/konradodwrot/cross-repo/prose/spec
       type: gitRepository
   devEnv:
