@@ -54,8 +54,7 @@ validate-pre-commit-all:
     - when: on_success
       changes:
         - .gitlab-ci.yml
-        - .env.tpl
-        - che.yml
+        - .che/**/*
         - Makefile
         - lefthook.yml
         - .repo/*.tpl
@@ -157,7 +156,7 @@ tag-mint:
         - bin/**/*
         - lib/**/*
         - workspace/**/*
-        - che.yml
+        - .che/**/*
         - Makefile
   variables:
     GIT_DEPTH: "0"
