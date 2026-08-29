@@ -1,5 +1,6 @@
 ##[>] 🤖
 !.repo/
+!.che/
 /AGENTS.md
 /CLAUDE.md
 /assets/data/makefile.agents.md
