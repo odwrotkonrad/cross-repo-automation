@@ -14,11 +14,13 @@ module Automation
     #   artifacts-produced.yml renders its version from the group variable, which still names the
     #   version published *before* this release, so regenerating from declarations alone propagates
     #   a stale pin and the release never reaches its consumers
-    def self.files(repos, released = {})
+    PRODUCERS_FILE = 'live/producers/generated.auto.tfvars'.freeze
+
+    def self.files(repos, released = {}, current = {})
       artifacts = Aggregate.artifacts(repos)
       consumers = repos.sort.to_h { |repo, r| [repo, consumer_vars(r, artifacts)] }.reject { |_, v| v.empty? }
       consumers.to_h { |repo, vars| ["live/consumers/#{repo}/generated.auto.tfvars", consumer_file(repo, vars)] }
-               .merge('live/producers/generated.auto.tfvars' => producer_file(repos, artifacts, released))
+               .merge(PRODUCERS_FILE => producer_file(repos, artifacts, released, current))
     end
 
     # A consumer's variables: its version for every artifact it consumes.
@@ -40,19 +42,37 @@ module Automation
       "#{body.join("\n")}\n"
     end
 
-    # The producers' file: each artifact's latest, the release that triggered this run winning.
-    def self.producer_file(repos, artifacts, released = {})
+    # The producers' file: each artifact's highest known version, the release that triggered this run winning.
+    def self.producer_file(repos, artifacts, released = {}, current = {})
       vars = repos.sort.flat_map { |_repo, r| r['downstream'] || [] }.filter_map do |entry|
         key = artifacts.dig(entry['uri'], 'versionEnvVar')
-        version = released[entry['uri']] || entry['version']
-        [key, version] if key && version
+        next unless key
+
+        version = released[entry['uri']] || highest(entry['version'], current[key])
+        [key, version] if version
       end.sort.to_h
       render_tfvars("group = #{GROUP.inspect}", vars)
     end
 
+    def self.highest(*versions)
+      versions.compact.max_by { |v| semver_key(v) }
+    end
+
+    # The last vX.Y.Z in a version string as a sortable triple; an unparsable version sorts lowest.
+    def self.semver_key(version)
+      m = version.to_s.scan(/v(\d+)\.(\d+)\.(\d+)/).last
+      m ? m.map(&:to_i) : [-1]
+    end
+
+    # The producer pins the file currently holds, {key => version}.
+    def self.parse_tfvars(body)
+      body.to_s.scan(/^(\w+)\s*=\s*"([^"]*)"$/).to_h
+    end
+
     def self.write(repos, moved:, released: {}, group: GROUP, writer: nil, dry_run: false)
       writer ||= RepoWriter.new(repo: REPO, group: group, dry_run: dry_run)
-      writer.write(files(repos, released), message: "[vars] #{moved}")
+      current = parse_tfvars(writer.read(PRODUCERS_FILE))
+      writer.write(files(repos, released, current), message: "[vars] #{moved}")
     end
   end
 end
