@@ -67,7 +67,7 @@ module Automation
       wrap("vars:#{job.key}", script, token: true)
     end
 
-    #[why] shared/ci/ruby is gitignored, rendered from cross-repo/misc, so a child pipeline's clean
+    #[why] shared/generic/ruby is gitignored, rendered from cross-repo/misc, so a child pipeline's clean
     #   checkout does not carry it and `require 'artifact'` in lib/automation.rb raises LoadError.
     #   The parent jobs get it for free because `make aggregate` runs che first; a generated job
     #   calls bin/automation directly, so it renders the payload itself
