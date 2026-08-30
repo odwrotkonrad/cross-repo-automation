@@ -2,33 +2,38 @@
 ##[>] 🤖🤖
 #[why] gated on real auth, not on one mechanism for it: glab reads its credential from its own config (host) or $GITLAB_TOKEN (sandbox image build, CI), and this asks whether either actually works
 #[why] `glab api /user`, not `glab auth status`: status exits 0 even when the token is rejected 401, so it answers "is a token configured", not "does it authenticate"
-gitlab/projects:
-  options:
-    runIf:
-      - env:GITLAB_GROUPS
-      - cmd:glab api /user
-  include:
-    #[why] prepare sits between clone and index: a clone carries no rendered purpose doc, and the
-    #   index inlines one per repo, so indexing before preparing yields a map of unexplained names
-    runScripts:
-      - scripts/10-clone.zsh
-      - scripts/15-prepare.zsh
-      - scripts/20-index.zsh
+profilesDefinitions:
+  'gitlab/projects':
+    type: host
+    options:
+      runIf:
+        - env:GITLAB_GROUPS
+        - cmd:glab api /user
+    include:
+      #[why] prepare sits between clone and index: a clone carries no rendered purpose doc, and the
+      #   index inlines one per repo, so indexing before preparing yields a map of unexplained names
+      runScripts:
+        - scripts/10-clone.zsh
+        - scripts/15-prepare.zsh
+        - scripts/20-index.zsh
 
-#[why] indexing only reads dirs already on disk: no token, no network, so no gate beyond the script's own che check. lets a routine sync refresh the map without any credential
-gitlab/projects-index:
-  include:
-    runScripts:
-      - scripts/20-index.zsh
+  #[why] indexing only reads dirs already on disk: no token, no network, so no gate beyond the script's own che check. lets a routine sync refresh the map without any credential
+  'gitlab/projects-index':
+    type: host
+    include:
+      runScripts:
+        - scripts/20-index.zsh
 
-#[why] link the workspace-parent Makefile onto the cloned parent dirs (tree/ mirrors the on-disk layout: projects/{,gitlab/,gitlab/konradodwrot/}Makefile): run `make init-note` from a parent instead of `make -C konradodwrot/notes init-note`; real host only (isVirt == false), skips image bakes/sandbox pods where $HOME/projects/gitlab is not the workspace
-gitlab/projects-parent-links:
-  options:
-    profileWorkingDirectory: tree
-    runIf:
-      - builtin:isVirt == false
-  include:
-    makeLinks:
-      - source: projects/**
-        dest: $HOME/projects/**
+  #[why] link the workspace-parent Makefile onto the cloned parent dirs (tree/ mirrors the on-disk layout: projects/{,gitlab/,gitlab/konradodwrot/}Makefile): run `make init-note` from a parent instead of `make -C konradodwrot/notes init-note`; real host only (isVirt == false), skips image bakes/sandbox pods where $HOME/projects/gitlab is not the workspace
+  'gitlab/projects-parent-links':
+    type: host
+    options:
+      profileWorkingDirectory: tree
+      runIf:
+        - builtin:isVirt == false
+    include:
+      makeLinks:
+        - source: projects/**
+          dest: $HOME/projects/**
+
 ##[<] 🤖🤖
