@@ -71,7 +71,7 @@ module Automation
     #   pipeline's clean checkout does not carry it and `require 'artifact'` in lib/automation.rb raises
     #   LoadError. The parent jobs get it for free because `make aggregate` runs che first; a generated
     #   job calls bin/automation directly, so it renders the payload itself
-    BOOTSTRAP = '[ -x shared/generic/ci/emit-events.zsh ] || ${CHE_BIN:-che} render-templates --profiles=genericSetup'.freeze
+    BOOTSTRAP = '[ -x shared/generic/ci/emit-events.zsh ] || ${BIN_CHE:-che} render-templates --profiles=genericSetup'.freeze
 
     def self.wrap(name, script, token:)
       credentials = token ? "  variables:\n    AUTOMATION_GITLAB_TOKEN: $REPO_PROTECTED_VAR_BOT_AUTOMATION_GITLAB_TOKEN\n    AUTOMATION_REVIEWER: $REPO_VAR_AUTOMATION_REVIEWER\n" : ''
