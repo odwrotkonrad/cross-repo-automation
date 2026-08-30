@@ -89,9 +89,11 @@ class DispatchTest < Minitest::Test
     assert_empty job_names(doc).grep(/^regen:/), 'artifacts.produced must emit zero regen jobs: it would loop'
   end
 
-  def test_a_consumed_record_moves_the_current_graph_only
+  def test_a_consumed_record_moves_the_current_graph_and_the_consumer_tfvars
     doc = dispatch(event('artifacts.consumed', { 'repo' => 'notes', 'upstream' => [{ 'uri' => ASSETS, 'version' => 'v0.0.61' }] }))
-    assert_equal ['graph:current'], job_names(doc)
+    assert_equal ['graph:current', 'vars:consumers'], job_names(doc)
+    assert_includes doc['vars:consumers']['script'].last, 'vars-write --moved'
+    refute_includes doc['vars:consumers']['script'].last, '--artifact'
   end
 
   def test_a_declaration_change_rederives_every_graph
@@ -109,7 +111,7 @@ class DispatchTest < Minitest::Test
   def test_one_commit_emitting_two_events_yields_one_pipeline
     doc = dispatch(event('artifacts.declared', { 'repo' => 'notes' }),
                    event('artifacts.consumed', { 'repo' => 'notes', 'upstream' => [] }))
-    assert_equal ['graph:artifacts+latest+edges+current', 'graph:current'], job_names(doc)
+    assert_equal ['graph:artifacts+latest+edges+current', 'graph:current', 'vars:consumers'], job_names(doc)
   end
 
   def test_an_unmatched_variable_emits_the_no_op_job

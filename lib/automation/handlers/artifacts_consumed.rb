@@ -1,10 +1,11 @@
 ##[>] 🤖🤖
 module Automation
   module Handlers
-    # ArtifactsConsumed records a consumer's adopted versions in the current graph: convergence moves here.
+    # ArtifactsConsumed records a consumer's adopted versions in the current graph and carries them into its ci-variables tfvars.
     module ArtifactsConsumed
       def self.call(event, graph:)
-        [RegenPipeline::GraphJob.new(kinds: [:current], moved: "#{event.repo} #{summary(event)}")]
+        moved = "#{event.repo} #{summary(event)}"
+        [RegenPipeline::GraphJob.new(kinds: [:current], moved: moved), RegenPipeline::VarsJob.new(moved: moved)]
       end
 
       def self.summary(event)

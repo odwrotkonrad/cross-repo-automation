@@ -106,8 +106,10 @@ module Automation
       end
     end
 
+    RENDER_TARGETS = %w[repo-render-templates generic-files-tracked-generate render-templates].freeze
+
     def render
-      target = Shell.ok?('make', '-n', 'repo-render-templates', chdir: @workdir) ? 'repo-render-templates' : 'render-templates'
+      target = RENDER_TARGETS.find { |t| Shell.ok?('make', '-n', t, chdir: @workdir) } || RENDER_TARGETS.last
       puts "regen: rendering via make #{target}"
       Shell.run('make', target, chdir: @workdir)
     end

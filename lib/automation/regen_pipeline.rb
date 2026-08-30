@@ -6,7 +6,7 @@ module Automation
   module RegenPipeline
     Job = Struct.new(:repo, :key, :tag, :prev, :record_only, keyword_init: true)
     GraphJob = Struct.new(:kinds, :moved, keyword_init: true)
-    VarsJob = Struct.new(:artifact, :key, :tag, :prev, keyword_init: true)
+    VarsJob = Struct.new(:artifact, :key, :tag, :prev, :moved, keyword_init: true)
     DesiredJob = Struct.new(:versions, :moved, keyword_init: true)
 
     IMAGE = '$ARTIFACT_REGISTRY/ci-linux:$OCI_IMAGES_CI_LINUX_REF'
@@ -64,6 +64,8 @@ module Automation
     end
 
     def self.vars(job)
+      return wrap('vars:consumers', "bin/automation vars-write --moved #{job.moved.inspect}", token: true) unless job.artifact
+
       script = "bin/automation vars-write --artifact #{job.artifact} --key #{job.key} --tag #{job.tag}"
       script += " --prev #{job.prev}" if job.prev
       wrap("vars:#{job.key}", script, token: true)
