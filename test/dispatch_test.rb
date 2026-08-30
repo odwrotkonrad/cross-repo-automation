@@ -61,7 +61,7 @@ class DispatchTest < Minitest::Test
                                                 'version' => 'v0.0.61', 'prev' => 'v0.0.60' }))
     job_names(doc).each do |name|
       script = doc.fetch(name).fetch('script')
-      assert_equal '[ -x shared/generic/ci/emit-events.zsh ] || ${CHE_BIN:-che} render-templates --profiles=genericSetup', script.first,
+      assert_equal '[ -x shared/generic/ci/emit-events.zsh ] || ${BIN_CHE:-che} render-templates --profiles=genericSetup', script.first,
                    "#{name} must render shared/generic/ruby before calling bin/automation"
       assert script.any? { |s| s.start_with?('bin/automation') }, "#{name} runs no automation command"
     end
