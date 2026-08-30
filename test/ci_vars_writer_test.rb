@@ -73,6 +73,23 @@ class CiVarsWriterTest < Minitest::Test
     assert_equal 'v0.0.44', held['MISC_REF']
   end
 
+  def consumer(held)
+    Automation::CiVarsWriter.files(repos, {}, {}, 'go-modules' => held)
+                            .fetch('live/consumers/go-modules/generated.auto.tfvars')
+  end
+
+  def test_a_consumer_pin_the_file_already_holds_is_never_lowered
+    assert_includes consumer('MISC_REF' => 'v0.0.44'), 'MISC_REF = "v0.0.44"'
+  end
+
+  def test_a_higher_consumer_declaration_wins_over_the_held_pin
+    assert_includes consumer('MISC_REF' => 'v0.0.29'), 'MISC_REF = "v0.0.30"'
+  end
+
+  def test_a_held_pin_the_consumer_no_longer_declares_is_dropped
+    refute_includes consumer('PROSE_ASSETS_REF' => 'v0.0.69'), 'PROSE_ASSETS_REF'
+  end
+
   #[why] consumers record what they resolved at build time, so a producer release must not rewrite
   #   them: that pin moves only when the consumer merges the bump
   def test_a_release_leaves_consumer_pins_untouched
