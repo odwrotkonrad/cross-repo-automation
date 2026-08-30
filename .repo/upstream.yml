@@ -3,6 +3,15 @@ upstream:
   - uri: gitlab.com/konradodwrot/centralized/assets/generic
     type: gitRepository
     versionEnvVar: CENTRALIZED_ASSETS_GENERIC_REF
+  - uri: gitlab.com/konradodwrot/centralized/assets/prose/human
+    type: gitRepository
+    versionEnvVar: CENTRALIZED_ASSETS_PROSE_HUMAN_REF
+  - uri: gitlab.com/konradodwrot/centralized/assets/prose/common
+    type: gitRepository
+    versionEnvVar: CENTRALIZED_ASSETS_PROSE_COMMON_REF
+  - uri: gitlab.com/konradodwrot/centralized/assets/prose/ai
+    type: gitRepository
+    versionEnvVar: CENTRALIZED_ASSETS_PROSE_AI_REF
   - uri: gitlab.com/konradodwrot/ai-harness/ai-tools-configs
     type: gitRepository
     versionEnvVar: AI_TOOLS_CONFIGS_REF

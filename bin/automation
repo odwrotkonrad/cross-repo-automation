@@ -141,7 +141,7 @@ def regen(args)
     p.on('--record-only') { opts[:record_only] = true }
   end
   abort USAGE unless o[:repo] && o[:tag] && o[:key]
-  abort "regen: --key must be a bare variable name like PROSE_ASSETS_REF, got #{o[:key].inspect}" unless o[:key].match?(/\A[A-Z][A-Z0-9_]*\z/)
+  abort "regen: --key must be a bare variable name like CENTRALIZED_ASSETS_GENERIC_REF, got #{o[:key].inspect}" unless o[:key].match?(/\A[A-Z][A-Z0-9_]*\z/)
   Automation::RegenRunner.new(repo: o[:repo], key: o[:key], tag: o[:tag], prev: o[:prev], workdir: o[:workdir],
                               dry_run: o[:dry_run] || false, record_only: o[:record_only] || false, group: GROUP).run
 end
