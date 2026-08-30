@@ -1,5 +1,5 @@
 ##[>] 🤖🤖
-$LOAD_PATH.unshift(File.expand_path('../shared/ci/ruby', __dir__))
+$LOAD_PATH.unshift(File.expand_path('../shared/generic/ruby', __dir__))
 
 require 'artifact'
 require 'declaration'

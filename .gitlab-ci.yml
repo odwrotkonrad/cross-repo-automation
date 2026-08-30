@@ -1,4 +1,17 @@
 ##[>] 🤖🤖
+include:
+  - project: konradodwrot/centralized/assets/generic
+    ref: $GRP_KO_VAR_CENTRALIZED_ASSETS_GENERIC_REF
+    file:
+      - consumer-repo-config/files-generation/templates/FilesTrackedVerify.gitlab-ci.yml
+      - consumer-repo-config/precommit-lefthook/templates/PrecommitChanged.gitlab-ci.yml
+      - consumer-repo-config/precommit-lefthook/templates/PrecommitAll.gitlab-ci.yml
+  - project: konradodwrot/centralized/assets/generic
+    ref: $GRP_KO_VAR_CENTRALIZED_ASSETS_GENERIC_REF
+    file: consumer-repo-config/release/templates/TagMint.gitlab-ci.yml
+    inputs:
+      changes: [bin/**/*, lib/**/*, workspace/**/*, .che/**/*, Makefile]
+
 #[why] an emitted event arrives as source `api`, not `pipeline`: emit-events.zsh posts to
 #   /projects/:id/pipeline with a PRIVATE-TOKEN header, and only the /trigger/pipeline form (a
 #   per-project trigger token) yields `pipeline`. Both are accepted so a rule keeps matching
@@ -38,37 +51,9 @@ variables:
   OCI_IMAGES_CI_LINUX_REF: $GRP_KO_VAR_OCI_IMAGES_CI_LINUX_REF
   CHE_SCHEMA_REF: $GRP_KO_VAR_CHE_SCHEMA_REF
   PROSE_SPEC_REF: $GRP_KO_VAR_PROSE_SPEC_REF
-  PROSE_ASSETS_REF: $GRP_KO_VAR_PROSE_ASSETS_REF
+  CENTRALIZED_ASSETS_GENERIC_REF: $GRP_KO_VAR_CENTRALIZED_ASSETS_GENERIC_REF
   AI_TOOLS_CONFIGS_REF: $GRP_KO_VAR_AI_TOOLS_CONFIGS_REF
-  MISC_REF: $GRP_KO_VAR_MISC_REF
   CI_IMAGE: $ARTIFACT_REGISTRY/ci-linux:$OCI_IMAGES_CI_LINUX_REF
-
-validate-pre-commit-all:
-  tags:
-    - gke-linux-amd64-small
-  stage: validate
-  image: $CI_IMAGE
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "pipeline" || $CI_PIPELINE_SOURCE == "api"
-      when: never
-    - when: on_success
-      changes:
-        - .gitlab-ci.yml
-        - .che/**/*
-        - Makefile
-        - lefthook.yml
-        - .repo/*.tpl
-        - .repo/deps-graph.yml
-        - .repo/upstream.yml
-        - .repo/upstream.env
-        - bin/**/*
-        - lib/**/*
-        - test/**/*
-        - workspace/**/*
-        - README.md
-  script:
-    - make repo-ci-precommit-all
-    - git diff --exit-code HEAD
 
 validate-deps-graph:
   tags:
@@ -141,27 +126,4 @@ regen-fan-out:
       - artifact: regen-pipeline.yml
         job: dispatch-event
     strategy: depend
-
-#[why] a merge to the default branch is the release event: mint the next semver tag so consumers can
-#   pin a version instead of tracking a moving branch. tag only, no release object: nothing here ships
-#   an artifact
-tag-mint:
-  tags:
-    - gke-linux-amd64-small
-  stage: release
-  image: $CI_IMAGE
-  rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-      changes:
-        - bin/**/*
-        - lib/**/*
-        - workspace/**/*
-        - .che/**/*
-        - Makefile
-  variables:
-    GIT_DEPTH: "0"
-    TAG_TOKEN: $REPO_PROTECTED_VAR_BOT_TAG_TOKEN
-  script:
-    - make tag-mint
-
 ##[<] 🤖🤖
