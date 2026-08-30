@@ -53,7 +53,7 @@ class DispatchTest < Minitest::Test
   end
 
   #[why] a child pipeline checks out a clean tree, and shared/generic/ruby is gitignored (rendered from
-  #   cross-repo/misc), so a generated job that calls bin/automation without rendering it first dies
+  #   centralized/assets/generic), so a generated job that calls bin/automation without rendering it first dies
   #   with `cannot load such file -- artifact`. The parent jobs never hit this: `make aggregate`
   #   runs che, which renders the payload as a side effect
   def test_every_generated_job_renders_the_shared_payload_before_running
@@ -61,7 +61,7 @@ class DispatchTest < Minitest::Test
                                                 'version' => 'v0.0.61', 'prev' => 'v0.0.60' }))
     job_names(doc).each do |name|
       script = doc.fetch(name).fetch('script')
-      assert_equal 'che render-templates --profiles=bootstrapCrossRepoCI', script.first,
+      assert_equal '[ -x shared/generic/ci/emit-events.zsh ] || ${CHE_BIN:-che} render-templates --profiles=genericSetup', script.first,
                    "#{name} must render shared/generic/ruby before calling bin/automation"
       assert script.any? { |s| s.start_with?('bin/automation') }, "#{name} runs no automation command"
     end
