@@ -44,6 +44,35 @@ class CiVarsWriterTest < Minitest::Test
     assert_match(/^MISC_REF\s+= "v0\.0\.30"$/, producers)
   end
 
+  def current(vars)
+    Automation::CiVarsWriter.files(repos, {}, vars).fetch('live/producers/generated.auto.tfvars')
+  end
+
+  def test_a_pin_the_file_already_holds_is_never_lowered
+    assert_match(/^MISC_REF\s+= "v0\.0\.44"$/, current('MISC_REF' => 'v0.0.44'))
+  end
+
+  def test_a_higher_declaration_wins_over_the_held_pin
+    assert_match(/^MISC_REF\s+= "v0\.0\.30"$/, current('MISC_REF' => 'v0.0.29'))
+  end
+
+  def test_the_released_version_wins_over_a_higher_held_pin
+    doc = Automation::CiVarsWriter.files(repos, { MISC => 'v0.0.37' }, 'MISC_REF' => 'v0.0.44')
+                                  .fetch('live/producers/generated.auto.tfvars')
+
+    assert_match(/^MISC_REF\s+= "v0\.0\.37"$/, doc)
+  end
+
+  def test_module_prefixed_versions_compare_on_their_semver
+    assert_match(%r{^GO_MODULES_CHE_REF\s+= "che/v0\.0\.109"$}, current('GO_MODULES_CHE_REF' => 'che/v0.0.109'))
+  end
+
+  def test_parse_tfvars_reads_the_held_pins
+    held = Automation::CiVarsWriter.parse_tfvars(current('MISC_REF' => 'v0.0.44'))
+
+    assert_equal 'v0.0.44', held['MISC_REF']
+  end
+
   #[why] consumers record what they resolved at build time, so a producer release must not rewrite
   #   them: that pin moves only when the consumer merges the bump
   def test_a_release_leaves_consumer_pins_untouched

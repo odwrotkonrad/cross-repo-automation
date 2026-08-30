@@ -14,6 +14,13 @@ module Automation
 
     attr_reader :workdir
 
+    # The current content of +rel+ in the target repo, nil when absent.
+    def read(rel)
+      clone unless @workdir
+      path = File.join(@workdir, rel)
+      File.file?(path) ? File.read(path) : nil
+    end
+
     # Writes +files+ (path => content) and pushes one commit, a no-op when nothing changed.
     def write(files, message:)
       clone unless @workdir
