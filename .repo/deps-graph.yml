@@ -11,8 +11,6 @@ dependsOn:
       type: gitRepository
     - uri: gitlab.com/konradodwrot/centralized/assets/prose/human
       type: gitRepository
-    - uri: gitlab.com/konradodwrot/centralized/assets/prose/common
-      type: gitRepository
     - uri: gitlab.com/konradodwrot/centralized/assets/prose/ai
       type: gitRepository
   devEnv:
