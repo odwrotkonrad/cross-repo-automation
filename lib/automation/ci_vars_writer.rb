@@ -16,18 +16,26 @@ module Automation
     #   a stale pin and the release never reaches its consumers
     PRODUCERS_FILE = 'live/producers/generated.auto.tfvars'.freeze
 
-    def self.files(repos, released = {}, current = {})
+    def self.files(repos, released = {}, current = {}, current_consumers = {})
       artifacts = Aggregate.artifacts(repos)
-      consumers = repos.sort.to_h { |repo, r| [repo, consumer_vars(r, artifacts)] }.reject { |_, v| v.empty? }
-      consumers.to_h { |repo, vars| ["live/consumers/#{repo}/generated.auto.tfvars", consumer_file(repo, vars)] }
+      consumers = repos.sort.to_h { |repo, r| [repo, consumer_vars(r, artifacts, current_consumers[repo] || {})] }
+                       .reject { |_, v| v.empty? }
+      consumers.to_h { |repo, vars| [consumer_path(repo), consumer_file(repo, vars)] }
                .merge(PRODUCERS_FILE => producer_file(repos, artifacts, released, current))
     end
 
-    # A consumer's variables: its version for every artifact it consumes.
-    def self.consumer_vars(declaration, artifacts)
+    def self.consumer_path(repo)
+      "live/consumers/#{repo}/generated.auto.tfvars"
+    end
+
+    # A consumer's variables: its version for every artifact it consumes, never below the pin the
+    # file already holds.
+    #[why] a consumer's declaration lags every hand pin: regenerating from it alone dragged ten
+    #   consumers back to a months-old image at the next release
+    def self.consumer_vars(declaration, artifacts, current = {})
       (declaration['upstream'] || []).filter_map do |entry|
         key = artifacts.dig(entry['uri'], 'versionEnvVar')
-        [key, entry['version']] if key && entry['version']
+        [key, highest(entry['version'], current[key])] if key && entry['version']
       end.sort.to_h
     end
 
@@ -72,7 +80,8 @@ module Automation
     def self.write(repos, moved:, released: {}, group: GROUP, writer: nil, dry_run: false)
       writer ||= RepoWriter.new(repo: REPO, group: group, dry_run: dry_run)
       current = parse_tfvars(writer.read(PRODUCERS_FILE))
-      writer.write(files(repos, released, current), message: "[vars] #{moved}")
+      current_consumers = repos.keys.to_h { |repo| [repo, parse_tfvars(writer.read(consumer_path(repo)))] }
+      writer.write(files(repos, released, current, current_consumers), message: "[vars] #{moved}")
     end
   end
 end
